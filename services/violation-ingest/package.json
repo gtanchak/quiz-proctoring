@@ -1,0 +1,23 @@
+{
+  "name": "@proctoring/violation-ingest",
+  "version": "0.0.0",
+  "private": true,
+  "description": "High-throughput violation event intake. Isolated from core-api so traffic spikes never slow test-taking. (Fastify)",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@proctoring/shared": "workspace:*",
+    "fastify": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2"
+  }
+}

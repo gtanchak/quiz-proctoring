@@ -1,0 +1,23 @@
+{
+  "name": "@proctoring/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared contracts: types, violation event schema, and validation. Imported by the SDK, both web apps, and every backend service.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "clean": "rm -rf dist .turbo"
+  }
+}

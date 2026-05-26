@@ -53,13 +53,19 @@ instruction to change this file.
 | Async job queue | AWS SQS |
 | Cloud provider | **AWS** (ECS Fargate, RDS, S3, SQS, CloudFront) |
 | Infrastructure as code | Terraform |
+| Monorepo tooling | **pnpm workspaces + Turborepo** |
 
 **Backend framework is Fastify, not NestJS** — do not generate NestJS
 decorators, modules, or DI. Use Fastify plugins and plain route handlers.
 
+**Monorepo tooling — decided (`PRO-46`):** pnpm workspaces for dependency and
+workspace management, with Turborepo for build/lint/test orchestration and
+caching. Internal packages are `@proctoring/<name>` and referenced by the
+`workspace:*` protocol, never relative paths across package boundaries.
+
 **Still open** (decide when you reach the relevant issue, then record the
-choice here): monorepo tooling, the PostgreSQL ORM/query layer, the WebSocket
-gateway implementation. Do not pick these unilaterally for unrelated work.
+choice here): the PostgreSQL ORM/query layer, the WebSocket gateway
+implementation. Do not pick these unilaterally for unrelated work.
 
 ---
 

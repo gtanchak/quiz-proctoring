@@ -113,6 +113,9 @@ export const attempts = pgTable("attempts", {
   candidateEmail: text("candidate_email"),
   status: attemptStatus("status").notNull().default("in_progress"),
   startedAt: timestamp("started_at", { withTimezone: true }),
+  // When the attempt's time expires. Computed server-side at start from the
+  // test duration; null means untimed. The single source of truth for the timer.
+  deadlineAt: timestamp("deadline_at", { withTimezone: true }),
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

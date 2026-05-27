@@ -2,16 +2,10 @@ import { Type } from "@sinclair/typebox";
 import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
 import { and, asc, count, desc, eq } from "drizzle-orm";
 import { db } from "../../db/client.js";
-import {
-  attempts,
-  questions,
-  tests,
-  type TestRow,
-} from "../../db/schema/tests.js";
+import { questions, tests, type TestRow } from "../../db/schema/tests.js";
 import { AppError } from "../../lib/errors.js";
 import { PaginationQuery, paginated } from "../../lib/pagination.js";
 import { assertTestMutable, findOwnedTest } from "../../lib/test-access.js";
-import { AttemptEntity, serializeAttempt } from "./attempts.js";
 
 const TestStatus = Type.Union([
   Type.Literal("draft"),
@@ -361,43 +355,6 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
     },
   );
 
-  app.get(
-    "/tests/:id/attempts",
-    {
-      schema: {
-        tags: ["attempts"],
-        summary: "List attempts for a test",
-        security: [{ bearerAuth: [] }],
-        params: IdParams,
-        querystring: PaginationQuery,
-        response: {
-          200: paginated(AttemptEntity),
-          404: Type.Ref("ErrorResponse"),
-        },
-      },
-    },
-    async (request) => {
-      await findOwnedTest(request.params.id, request.apiKey!.id);
-      const { limit, offset } = request.query;
-      const where = eq(attempts.testId, request.params.id);
-
-      const [rows, [{ total }]] = await Promise.all([
-        db
-          .select()
-          .from(attempts)
-          .where(where)
-          .orderBy(desc(attempts.createdAt))
-          .limit(limit)
-          .offset(offset),
-        db.select({ total: count() }).from(attempts).where(where),
-      ]);
-
-      return {
-        data: rows.map(serializeAttempt),
-        pagination: { total, limit, offset },
-      };
-    },
-  );
 };
 
 /** Rejects an availability window whose end is not after its start. */

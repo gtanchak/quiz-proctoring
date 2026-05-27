@@ -89,8 +89,10 @@ not require a database connection.
 | GET | `/v1/tests/:testId/questions/:questionId` | Read a question |
 | PATCH | `/v1/tests/:testId/questions/:questionId` | Update a question |
 | DELETE | `/v1/tests/:testId/questions/:questionId` | Delete a question |
+| POST | `/v1/tests/:testId/attempts` | Start an attempt (published tests only) |
 | GET | `/v1/tests/:id/attempts` | List a test's attempts |
-| GET | `/v1/attempts/:id` | Read an attempt |
+| GET | `/v1/attempts/:id` | Read an attempt (auto-submits if past deadline) |
+| POST | `/v1/attempts/:id/submit` | Submit and lock an attempt |
 
 A test carries config: `durationMinutes`, `availableFrom`/`availableUntil`
 window, `maxAttempts`, scoring (`passMark`, `negativeMarking`), and
@@ -103,6 +105,17 @@ Auto-grading lives in `src/lib/grading.ts` (`gradeMcq`): single and multi
 all-or-nothing, plus a configurable `partial` mode with optional negative
 marking. Candidate-side rendering and answer capture are the attempt-taking flow
 (PRO-7/PRO-8); the authoring UI is admin-web (after PRO-39).
+
+### Server-authoritative timer (PRO-7)
+
+`deadline_at` is set from the **server** clock when an attempt starts
+(`started_at + test.duration_minutes`; null = untimed). Remaining time is always
+computed server-side (`src/lib/timer.ts`), so a refresh or brief disconnect
+resumes from true elapsed time and the client cannot buy extra time. An attempt
+past its deadline is auto-submitted and locked the next time it is read or
+submitted (lazy expiry; a background sweep is a V1 refinement). Candidate-facing
+access (links, invite, sessions, max-attempts, resume) is **PRO-8**; the
+countdown UI is candidate-web.
 
 All `/v1` resources are scoped to the calling API key; another tenant's rows
 return `404`.

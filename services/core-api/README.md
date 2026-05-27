@@ -77,13 +77,21 @@ not require a database connection.
 | -- | -- | -- |
 | GET | `/health` | Liveness (unversioned) |
 | GET | `/v1/me` | Identity of the authenticated key |
-| POST | `/v1/tests` | Create a test |
+| POST | `/v1/tests` | Create a test (draft) |
 | GET | `/v1/tests` | List (pagination, `status` filter, `sort`/`order`) |
 | GET | `/v1/tests/:id` | Read |
-| PATCH | `/v1/tests/:id` | Update |
-| DELETE | `/v1/tests/:id` | Delete |
+| PATCH | `/v1/tests/:id` | Update config (blocked while published with attempts in progress) |
+| DELETE | `/v1/tests/:id` | Delete (same guard) |
+| POST | `/v1/tests/:id/publish` | Publish — validates ≥1 question and a valid window |
+| POST | `/v1/tests/:id/unpublish` | Return to draft |
 | GET | `/v1/tests/:id/attempts` | List a test's attempts |
 | GET | `/v1/attempts/:id` | Read an attempt |
+
+A test carries config: `durationMinutes`, `availableFrom`/`availableUntil`
+window, `maxAttempts`, scoring (`passMark`, `negativeMarking`), and
+`draft`/`published` status. Status changes only via publish/unpublish, never via
+PATCH. The `questions` table exists as minimal linkage (PRO-5); question types
+and authoring are PRO-6.
 
 All `/v1` resources are scoped to the calling API key; another tenant's rows
 return `404`.

@@ -46,7 +46,7 @@ describe("tests resource (/v1/tests)", () => {
       method: "POST",
       url: "/v1/tests",
       headers: auth(ownerA.token),
-      payload: { title: "Algebra I", durationSeconds: 3600 },
+      payload: { title: "Algebra I", durationMinutes: 60 },
     });
     expect(created.statusCode).toBe(201);
     const body = created.json();
@@ -109,16 +109,18 @@ describe("tests resource (/v1/tests)", () => {
     });
     expect(read.statusCode).toBe(200);
 
+    // status is not settable via PATCH — it changes only via publish/unpublish.
     const updated = await app.inject({
       method: "PATCH",
       url: `/v1/tests/${created.id}`,
       headers: auth(ownerA.token),
-      payload: { title: "Lifecycle (renamed)", status: "published" },
+      payload: { title: "Lifecycle (renamed)", description: "updated" },
     });
     expect(updated.statusCode).toBe(200);
     expect(updated.json()).toMatchObject({
       title: "Lifecycle (renamed)",
-      status: "published",
+      description: "updated",
+      status: "draft",
     });
 
     const deleted = await app.inject({

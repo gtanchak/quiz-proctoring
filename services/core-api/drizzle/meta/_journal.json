@@ -15,6 +15,20 @@
       "when": 1779865434532,
       "tag": "0001_common_starhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779880951209,
+      "tag": "0002_swift_lady_ursula",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779880962747,
+      "tag": "0003_robust_makkari",
+      "breakpoints": true
     }
   ]
 }

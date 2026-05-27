@@ -1,0 +1,24 @@
+# Local development dependencies only. Not used in deployed environments —
+# production infrastructure is provisioned via Terraform under infra/ (AWS RDS,
+# etc.). Bring up with: docker compose up -d
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: proctoring-postgres
+    environment:
+      POSTGRES_USER: proctoring
+      POSTGRES_PASSWORD: proctoring
+      POSTGRES_DB: proctoring_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/local/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proctoring -d proctoring_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

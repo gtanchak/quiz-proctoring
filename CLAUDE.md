@@ -54,6 +54,8 @@ instruction to change this file.
 | Cloud provider | **AWS** (ECS Fargate, RDS, S3, SQS, CloudFront) |
 | Infrastructure as code | Terraform |
 | Monorepo tooling | **pnpm workspaces + Turborepo** |
+| PostgreSQL ORM / query layer | **Drizzle ORM** (migrations via drizzle-kit) |
+| Fastify schema / validation | **TypeBox** (`@sinclair/typebox`) |
 
 **Backend framework is Fastify, not NestJS** — do not generate NestJS
 decorators, modules, or DI. Use Fastify plugins and plain route handlers.
@@ -63,9 +65,20 @@ workspace management, with Turborepo for build/lint/test orchestration and
 caching. Internal packages are `@proctoring/<name>` and referenced by the
 `workspace:*` protocol, never relative paths across package boundaries.
 
+**PostgreSQL ORM / query layer — decided (`PRO-33`):** Drizzle ORM. TS-first,
+explicit and SQL-shaped (no hidden runtime magic — same rationale as the
+Fastify choice); schema-inferred types, migrations managed with `drizzle-kit`.
+Used by every TypeScript service that touches Postgres.
+
+**Fastify validation — decided (`PRO-33`):** TypeBox (`@sinclair/typebox`) via
+`@fastify/type-provider-typebox`. Route schemas are JSON Schema, so Fastify
+validates natively (Ajv) and the OpenAPI spec generates from the same source.
+The same definitions back the `shared` contract (`PRO-50`). Prefer one TypeBox
+schema as the single source for both runtime validation and static types.
+
 **Still open** (decide when you reach the relevant issue, then record the
-choice here): the PostgreSQL ORM/query layer, the WebSocket gateway
-implementation. Do not pick these unilaterally for unrelated work.
+choice here): the WebSocket gateway implementation. Do not pick this
+unilaterally for unrelated work.
 
 ---
 

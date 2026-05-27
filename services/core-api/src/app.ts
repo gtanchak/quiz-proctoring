@@ -40,6 +40,8 @@ export function buildApp(): FastifyInstance {
       tags: [
         { name: "system", description: "Health and operational endpoints" },
         { name: "auth", description: "Authentication and API keys" },
+        { name: "tests", description: "Test authoring and management" },
+        { name: "attempts", description: "Candidate attempts (read)" },
       ],
       components: {
         securitySchemes: {

@@ -84,14 +84,25 @@ not require a database connection.
 | DELETE | `/v1/tests/:id` | Delete (same guard) |
 | POST | `/v1/tests/:id/publish` | Publish — validates ≥1 question and a valid window |
 | POST | `/v1/tests/:id/unpublish` | Return to draft |
+| POST | `/v1/tests/:testId/questions` | Add an MCQ question |
+| GET | `/v1/tests/:testId/questions` | List a test's questions |
+| GET | `/v1/tests/:testId/questions/:questionId` | Read a question |
+| PATCH | `/v1/tests/:testId/questions/:questionId` | Update a question |
+| DELETE | `/v1/tests/:testId/questions/:questionId` | Delete a question |
 | GET | `/v1/tests/:id/attempts` | List a test's attempts |
 | GET | `/v1/attempts/:id` | Read an attempt |
 
 A test carries config: `durationMinutes`, `availableFrom`/`availableUntil`
 window, `maxAttempts`, scoring (`passMark`, `negativeMarking`), and
 `draft`/`published` status. Status changes only via publish/unpublish, never via
-PATCH. The `questions` table exists as minimal linkage (PRO-5); question types
-and authoring are PRO-6.
+PATCH.
+
+Questions (PRO-6) support MCQ — single- and multi-correct. Options are sent with
+a `correct` flag; the server assigns option ids and derives the correct set.
+Auto-grading lives in `src/lib/grading.ts` (`gradeMcq`): single and multi
+all-or-nothing, plus a configurable `partial` mode with optional negative
+marking. Candidate-side rendering and answer capture are the attempt-taking flow
+(PRO-7/PRO-8); the authoring UI is admin-web (after PRO-39).
 
 All `/v1` resources are scoped to the calling API key; another tenant's rows
 return `404`.

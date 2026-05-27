@@ -2,7 +2,12 @@ import { Type } from "@sinclair/typebox";
 import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
 import { and, asc, count, desc, eq } from "drizzle-orm";
 import { db } from "../../db/client.js";
-import { attempts, tests, type TestRow } from "../../db/schema/tests.js";
+import {
+  attempts,
+  questions,
+  tests,
+  type TestRow,
+} from "../../db/schema/tests.js";
 import { AppError } from "../../lib/errors.js";
 import { PaginationQuery, paginated } from "../../lib/pagination.js";
 import { AttemptEntity, serializeAttempt } from "./attempts.js";
@@ -18,8 +23,17 @@ const TestEntity = Type.Object(
     id: Type.String({ format: "uuid" }),
     title: Type.String(),
     description: Type.Union([Type.String(), Type.Null()]),
+    instructions: Type.Union([Type.String(), Type.Null()]),
     status: TestStatus,
-    durationSeconds: Type.Union([Type.Integer(), Type.Null()]),
+    durationMinutes: Type.Union([Type.Integer(), Type.Null()]),
+    availableFrom: Type.Union([Type.String({ format: "date-time" }), Type.Null()]),
+    availableUntil: Type.Union([
+      Type.String({ format: "date-time" }),
+      Type.Null(),
+    ]),
+    maxAttempts: Type.Integer(),
+    passMark: Type.Union([Type.Integer(), Type.Null()]),
+    negativeMarking: Type.Boolean(),
     createdAt: Type.String({ format: "date-time" }),
     updatedAt: Type.String({ format: "date-time" }),
   },
@@ -31,21 +45,38 @@ function serializeTest(row: TestRow) {
     id: row.id,
     title: row.title,
     description: row.description,
+    instructions: row.instructions,
     status: row.status,
-    durationSeconds: row.durationSeconds,
+    durationMinutes: row.durationMinutes,
+    availableFrom: row.availableFrom?.toISOString() ?? null,
+    availableUntil: row.availableUntil?.toISOString() ?? null,
+    maxAttempts: row.maxAttempts,
+    passMark: row.passMark,
+    negativeMarking: row.negativeMarking,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
 
-const CreateTestBody = Type.Object({
-  title: Type.String({ minLength: 1, maxLength: 200 }),
-  description: Type.Optional(Type.String({ maxLength: 2000 })),
-  status: Type.Optional(TestStatus),
-  durationSeconds: Type.Optional(Type.Integer({ minimum: 1 })),
-});
+// Status is not settable directly — it changes only via publish/unpublish.
+const CreateTestBody = Type.Object(
+  {
+    title: Type.String({ minLength: 1, maxLength: 200 }),
+    description: Type.Optional(Type.String({ maxLength: 2000 })),
+    instructions: Type.Optional(Type.String({ maxLength: 5000 })),
+    durationMinutes: Type.Optional(Type.Integer({ minimum: 1 })),
+    availableFrom: Type.Optional(Type.String({ format: "date-time" })),
+    availableUntil: Type.Optional(Type.String({ format: "date-time" })),
+    maxAttempts: Type.Optional(Type.Integer({ minimum: 1 })),
+    passMark: Type.Optional(Type.Integer({ minimum: 0 })),
+    negativeMarking: Type.Optional(Type.Boolean()),
+  },
+  { additionalProperties: false },
+);
 
-const UpdateTestBody = Type.Partial(CreateTestBody);
+const UpdateTestBody = Type.Partial(CreateTestBody, {
+  additionalProperties: false,
+});
 
 const ListTestsQuery = Type.Composite([
   PaginationQuery,
@@ -67,9 +98,9 @@ const ListTestsQuery = Type.Composite([
 const IdParams = Type.Object({ id: Type.String({ format: "uuid" }) });
 
 /**
- * Tests CRUD + nested attempts listing. Every row is scoped to the calling API
- * key (`ownerKeyId`), so one tenant can never see or mutate another's tests —
- * a missing or unowned row returns 404, never 403, to avoid leaking existence.
+ * Tests CRUD, the publish lifecycle, and nested attempts listing. Every row is
+ * scoped to the calling API key (`ownerKeyId`): an unowned or missing row
+ * returns 404, never 403, to avoid leaking existence across tenants.
  */
 export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.post(
@@ -77,16 +108,34 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
     {
       schema: {
         tags: ["tests"],
-        summary: "Create a test",
+        summary: "Create a test (draft)",
         security: [{ bearerAuth: [] }],
         body: CreateTestBody,
         response: { 201: TestEntity, 400: Type.Ref("ErrorResponse") },
       },
     },
     async (request, reply) => {
+      const body = request.body;
+      const from = body.availableFrom ? new Date(body.availableFrom) : undefined;
+      const until = body.availableUntil
+        ? new Date(body.availableUntil)
+        : undefined;
+      assertValidWindow(from ?? null, until ?? null);
+
       const [row] = await db
         .insert(tests)
-        .values({ ownerKeyId: request.apiKey!.id, ...request.body })
+        .values({
+          ownerKeyId: request.apiKey!.id,
+          title: body.title,
+          description: body.description,
+          instructions: body.instructions,
+          durationMinutes: body.durationMinutes,
+          availableFrom: from,
+          availableUntil: until,
+          maxAttempts: body.maxAttempts,
+          passMark: body.passMark,
+          negativeMarking: body.negativeMarking,
+        })
         .returning();
       reply.status(201);
       return serializeTest(row);
@@ -161,15 +210,58 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
           200: TestEntity,
           400: Type.Ref("ErrorResponse"),
           404: Type.Ref("ErrorResponse"),
+          409: Type.Ref("ErrorResponse"),
         },
       },
     },
     async (request) => {
-      await findOwnedTest(request.params.id, request.apiKey!.id);
+      const existing = await findOwnedTest(
+        request.params.id,
+        request.apiKey!.id,
+      );
+      await assertMutable(existing);
+
+      const body = request.body;
+      // Validate the resulting window against the merged state.
+      const effFrom =
+        body.availableFrom !== undefined
+          ? new Date(body.availableFrom)
+          : existing.availableFrom;
+      const effUntil =
+        body.availableUntil !== undefined
+          ? new Date(body.availableUntil)
+          : existing.availableUntil;
+      assertValidWindow(effFrom, effUntil);
+
       const [row] = await db
         .update(tests)
-        .set({ ...request.body, updatedAt: new Date() })
-        .where(eq(tests.id, request.params.id))
+        .set({
+          ...(body.title !== undefined && { title: body.title }),
+          ...(body.description !== undefined && {
+            description: body.description,
+          }),
+          ...(body.instructions !== undefined && {
+            instructions: body.instructions,
+          }),
+          ...(body.durationMinutes !== undefined && {
+            durationMinutes: body.durationMinutes,
+          }),
+          ...(body.availableFrom !== undefined && {
+            availableFrom: new Date(body.availableFrom),
+          }),
+          ...(body.availableUntil !== undefined && {
+            availableUntil: new Date(body.availableUntil),
+          }),
+          ...(body.maxAttempts !== undefined && {
+            maxAttempts: body.maxAttempts,
+          }),
+          ...(body.passMark !== undefined && { passMark: body.passMark }),
+          ...(body.negativeMarking !== undefined && {
+            negativeMarking: body.negativeMarking,
+          }),
+          updatedAt: new Date(),
+        })
+        .where(eq(tests.id, existing.id))
         .returning();
       return serializeTest(row);
     },
@@ -183,14 +275,88 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
         summary: "Delete a test",
         security: [{ bearerAuth: [] }],
         params: IdParams,
-        response: { 204: Type.Null(), 404: Type.Ref("ErrorResponse") },
+        response: {
+          204: Type.Null(),
+          404: Type.Ref("ErrorResponse"),
+          409: Type.Ref("ErrorResponse"),
+        },
       },
     },
     async (request, reply) => {
-      await findOwnedTest(request.params.id, request.apiKey!.id);
-      await db.delete(tests).where(eq(tests.id, request.params.id));
+      const existing = await findOwnedTest(
+        request.params.id,
+        request.apiKey!.id,
+      );
+      await assertMutable(existing);
+      await db.delete(tests).where(eq(tests.id, existing.id));
       reply.status(204);
       return null;
+    },
+  );
+
+  app.post(
+    "/tests/:id/publish",
+    {
+      schema: {
+        tags: ["tests"],
+        summary: "Publish a test",
+        description:
+          "Validates the test (at least one question, valid availability window) then marks it published.",
+        security: [{ bearerAuth: [] }],
+        params: IdParams,
+        response: {
+          200: TestEntity,
+          404: Type.Ref("ErrorResponse"),
+          409: Type.Ref("ErrorResponse"),
+        },
+      },
+    },
+    async (request) => {
+      const test = await findOwnedTest(request.params.id, request.apiKey!.id);
+
+      assertValidWindow(test.availableFrom, test.availableUntil);
+
+      const [{ total: questionCount }] = await db
+        .select({ total: count() })
+        .from(questions)
+        .where(eq(questions.testId, test.id));
+      if (questionCount === 0) {
+        throw AppError.conflict("Cannot publish a test with no questions");
+      }
+
+      const [row] = await db
+        .update(tests)
+        .set({ status: "published", updatedAt: new Date() })
+        .where(eq(tests.id, test.id))
+        .returning();
+      return serializeTest(row);
+    },
+  );
+
+  app.post(
+    "/tests/:id/unpublish",
+    {
+      schema: {
+        tags: ["tests"],
+        summary: "Unpublish a test (back to draft)",
+        security: [{ bearerAuth: [] }],
+        params: IdParams,
+        response: {
+          200: TestEntity,
+          404: Type.Ref("ErrorResponse"),
+          409: Type.Ref("ErrorResponse"),
+        },
+      },
+    },
+    async (request) => {
+      const test = await findOwnedTest(request.params.id, request.apiKey!.id);
+      await assertMutable(test);
+      const [row] = await db
+        .update(tests)
+        .set({ status: "draft", updatedAt: new Date() })
+        .where(eq(tests.id, test.id))
+        .returning();
+      return serializeTest(row);
     },
   );
 
@@ -244,4 +410,35 @@ async function findOwnedTest(id: string, ownerKeyId: string): Promise<TestRow> {
     throw AppError.notFound("Test not found");
   }
   return row;
+}
+
+/** Rejects an availability window whose end is not after its start. */
+function assertValidWindow(from: Date | null, until: Date | null): void {
+  if (from && until && from.getTime() >= until.getTime()) {
+    throw AppError.badRequest(
+      "available_until must be after available_from",
+      { availableFrom: from.toISOString(), availableUntil: until.toISOString() },
+    );
+  }
+}
+
+/**
+ * Guards structural mutation: a published test with attempts in progress is
+ * immutable, so candidates mid-test never see it change underneath them.
+ */
+async function assertMutable(test: TestRow): Promise<void> {
+  if (test.status !== "published") {
+    return;
+  }
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(attempts)
+    .where(
+      and(eq(attempts.testId, test.id), eq(attempts.status, "in_progress")),
+    );
+  if (total > 0) {
+    throw AppError.conflict(
+      "Published test has attempts in progress and cannot be modified",
+    );
+  }
 }

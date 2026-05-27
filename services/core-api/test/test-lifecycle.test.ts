@@ -92,9 +92,13 @@ describe("test configuration & publish lifecycle", () => {
 
   it("publishes a test once it has a question, and can unpublish", async () => {
     const created = (await createTest({ title: "Publishable" })).json();
-    await db
-      .insert(questions)
-      .values({ testId: created.id, prompt: "2+2?", points: 1, position: 0 });
+    await db.insert(questions).values({
+      testId: created.id,
+      type: "mcq_single",
+      prompt: "2+2?",
+      points: 1,
+      position: 0,
+    });
 
     const published = await app.inject({
       method: "POST",
@@ -115,9 +119,13 @@ describe("test configuration & publish lifecycle", () => {
 
   it("makes a published test immutable while an attempt is in progress", async () => {
     const created = (await createTest({ title: "Live" })).json();
-    await db
-      .insert(questions)
-      .values({ testId: created.id, prompt: "Q", points: 1, position: 0 });
+    await db.insert(questions).values({
+      testId: created.id,
+      type: "mcq_single",
+      prompt: "Q",
+      points: 1,
+      position: 0,
+    });
     await app.inject({
       method: "POST",
       url: `/v1/tests/${created.id}/publish`,

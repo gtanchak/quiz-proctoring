@@ -1,6 +1,7 @@
 import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
 import { attemptsRoutes } from "./attempts.js";
 import { meRoutes } from "./me.js";
+import { questionsRoutes } from "./questions.js";
 import { testsRoutes } from "./tests.js";
 
 /**
@@ -10,5 +11,6 @@ import { testsRoutes } from "./tests.js";
 export const v1Routes: FastifyPluginAsyncTypebox = async (app) => {
   app.register(meRoutes);
   app.register(testsRoutes);
+  app.register(questionsRoutes);
   app.register(attemptsRoutes);
 };

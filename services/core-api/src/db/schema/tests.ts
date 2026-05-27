@@ -1,6 +1,7 @@
 import {
   boolean,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -47,19 +48,50 @@ export const tests = pgTable("tests", {
     .defaultNow(),
 });
 
+/** A selectable MCQ option. Stored as jsonb; ids are server-assigned. */
+export interface McqOption {
+  id: string;
+  text: string;
+  imageUrl?: string;
+}
+
+export const questionType = pgEnum("question_type", [
+  "mcq_single",
+  "mcq_multiple",
+]);
+
 /**
- * Questions belonging to a test. This is the minimal linkage entity (PRO-5);
- * concrete question types and authoring (MCQ, etc.) are added in PRO-6 and
- * later, which extend this table. Enough exists here to link, order, score, and
- * count questions — the last of which gates publishing.
+ * How a multi-correct MCQ is scored:
+ * - `all_or_nothing`: full points only if the selected set equals the correct set.
+ * - `partial`: per-option credit (see lib/grading.ts).
+ * (Single-correct questions are always all-or-nothing.)
+ */
+export const gradingMode = pgEnum("grading_mode", [
+  "all_or_nothing",
+  "partial",
+]);
+
+/**
+ * Questions belonging to a test. PRO-5 created the linkage; PRO-6 adds the MCQ
+ * fields. Later question types extend `questionType` and reuse these columns
+ * (`options`/`correctOptionIds` are general enough for choice-based types).
  */
 export const questions = pgTable("questions", {
   id: uuid("id").primaryKey().defaultRandom(),
   testId: uuid("test_id")
     .notNull()
     .references(() => tests.id, { onDelete: "cascade" }),
+  type: questionType("type").notNull(),
   prompt: text("prompt").notNull(),
+  imageUrl: text("image_url"),
+  options: jsonb("options").$type<McqOption[]>().notNull().default([]),
+  correctOptionIds: jsonb("correct_option_ids")
+    .$type<string[]>()
+    .notNull()
+    .default([]),
+  gradingMode: gradingMode("grading_mode").notNull().default("all_or_nothing"),
   points: integer("points").notNull().default(1),
+  negativeMarking: boolean("negative_marking").notNull().default(false),
   position: integer("position").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

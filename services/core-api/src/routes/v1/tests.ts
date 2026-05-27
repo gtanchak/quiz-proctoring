@@ -10,6 +10,7 @@ import {
 } from "../../db/schema/tests.js";
 import { AppError } from "../../lib/errors.js";
 import { PaginationQuery, paginated } from "../../lib/pagination.js";
+import { assertTestMutable, findOwnedTest } from "../../lib/test-access.js";
 import { AttemptEntity, serializeAttempt } from "./attempts.js";
 
 const TestStatus = Type.Union([
@@ -219,7 +220,7 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
         request.params.id,
         request.apiKey!.id,
       );
-      await assertMutable(existing);
+      await assertTestMutable(existing);
 
       const body = request.body;
       // Validate the resulting window against the merged state.
@@ -287,7 +288,7 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
         request.params.id,
         request.apiKey!.id,
       );
-      await assertMutable(existing);
+      await assertTestMutable(existing);
       await db.delete(tests).where(eq(tests.id, existing.id));
       reply.status(204);
       return null;
@@ -350,7 +351,7 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
     },
     async (request) => {
       const test = await findOwnedTest(request.params.id, request.apiKey!.id);
-      await assertMutable(test);
+      await assertTestMutable(test);
       const [row] = await db
         .update(tests)
         .set({ status: "draft", updatedAt: new Date() })
@@ -399,46 +400,12 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
   );
 };
 
-/** Loads a test owned by the given key, or throws 404. */
-async function findOwnedTest(id: string, ownerKeyId: string): Promise<TestRow> {
-  const [row] = await db
-    .select()
-    .from(tests)
-    .where(and(eq(tests.id, id), eq(tests.ownerKeyId, ownerKeyId)))
-    .limit(1);
-  if (!row) {
-    throw AppError.notFound("Test not found");
-  }
-  return row;
-}
-
 /** Rejects an availability window whose end is not after its start. */
 function assertValidWindow(from: Date | null, until: Date | null): void {
   if (from && until && from.getTime() >= until.getTime()) {
     throw AppError.badRequest(
       "available_until must be after available_from",
       { availableFrom: from.toISOString(), availableUntil: until.toISOString() },
-    );
-  }
-}
-
-/**
- * Guards structural mutation: a published test with attempts in progress is
- * immutable, so candidates mid-test never see it change underneath them.
- */
-async function assertMutable(test: TestRow): Promise<void> {
-  if (test.status !== "published") {
-    return;
-  }
-  const [{ total }] = await db
-    .select({ total: count() })
-    .from(attempts)
-    .where(
-      and(eq(attempts.testId, test.id), eq(attempts.status, "in_progress")),
-    );
-  if (total > 0) {
-    throw AppError.conflict(
-      "Published test has attempts in progress and cannot be modified",
     );
   }
 }

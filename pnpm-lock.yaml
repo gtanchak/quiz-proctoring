@@ -156,19 +156,43 @@ importers:
 
   services/violation-ingest:
     dependencies:
+      '@fastify/rate-limit':
+        specifier: ^10.2.2
+        version: 10.3.0
+      '@fastify/type-provider-typebox':
+        specifier: ^5.1.0
+        version: 5.2.0(@sinclair/typebox@0.34.49)
       '@proctoring/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@sinclair/typebox':
+        specifier: ^0.34.13
+        version: 0.34.49
+      drizzle-orm:
+        specifier: ^0.38.3
+        version: 0.38.4(@types/pg@8.20.0)(@types/react@18.3.29)(pg@8.21.0)(react@18.3.1)
       fastify:
         specifier: ^5.2.0
         version: 5.8.5
+      pg:
+        specifier: ^8.13.1
+        version: 8.21.0
     devDependencies:
       '@types/node':
         specifier: ^22.10.5
         version: 22.19.19
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.0
+      drizzle-kit:
+        specifier: ^0.30.1
+        version: 0.30.6
       tsx:
         specifier: ^4.19.2
         version: 4.22.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.19)(jsdom@25.0.1)
 
 packages:
 

@@ -89,10 +89,22 @@ not require a database connection.
 | GET | `/v1/tests/:testId/questions/:questionId` | Read a question |
 | PATCH | `/v1/tests/:testId/questions/:questionId` | Update a question |
 | DELETE | `/v1/tests/:testId/questions/:questionId` | Delete a question |
-| POST | `/v1/tests/:testId/attempts` | Start an attempt (published tests only) |
+| POST | `/v1/tests/:testId/invites` | Invite a candidate email (invite-only) |
+| GET | `/v1/tests/:testId/invites` | List invited emails |
+| DELETE | `/v1/tests/:testId/invites/:inviteId` | Remove an invite |
+| POST | `/v1/tests/:testId/attempts` | Admin-start an attempt (published only) |
 | GET | `/v1/tests/:id/attempts` | List a test's attempts |
 | GET | `/v1/attempts/:id` | Read an attempt (auto-submits if past deadline) |
 | POST | `/v1/attempts/:id/submit` | Submit and lock an attempt |
+
+### Candidate (public) endpoints — no admin key
+
+| Method | Path | Notes |
+| -- | -- | -- |
+| GET | `/v1/public/tests/:token` | Landing info + link state (`not_yet_open`/`open`/`closed`) |
+| POST | `/v1/public/tests/:token/start` | Start (201) or resume (200) an attempt; returns a session token |
+| GET | `/v1/public/attempt` | Read the current attempt (session-token auth) |
+| POST | `/v1/public/attempt/submit` | Submit the current attempt (session-token auth) |
 
 A test carries config: `durationMinutes`, `availableFrom`/`availableUntil`
 window, `maxAttempts`, scoring (`passMark`, `negativeMarking`), and
@@ -114,8 +126,23 @@ computed server-side (`src/lib/timer.ts`), so a refresh or brief disconnect
 resumes from true elapsed time and the client cannot buy extra time. An attempt
 past its deadline is auto-submitted and locked the next time it is read or
 submitted (lazy expiry; a background sweep is a V1 refinement). Candidate-facing
-access (links, invite, sessions, max-attempts, resume) is **PRO-8**; the
+access (links, invite, sessions, max-attempts, resume) is **PRO-8** (below); the
 countdown UI is candidate-web.
+
+### Candidate access via share links (PRO-8)
+
+Every test gets an opaque `access_token` (the share link id) at creation. The
+link only admits candidates once the test is published and within its
+availability window (`linkState` in `src/lib/access.ts`). Access is `open`
+(anyone with the link) or `invite` (email must be on the test's allow-list).
+
+Candidates authenticate via the `/v1/public/*` surface (excluded from the admin
+auth hook): the landing is open; starting an attempt issues a per-attempt
+**session token** (hashed at rest, returned once), which authorizes the
+poll/submit endpoints. Starting enforces the link state, invite allow-list, and
+`max_attempts`, and **resumes** an existing in-progress attempt (re-issuing a
+session token) rather than creating a duplicate. The candidate landing/countdown
+UI lives in candidate-web.
 
 All `/v1` resources are scoped to the calling API key; another tenant's rows
 return `404`.

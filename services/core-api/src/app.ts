@@ -42,7 +42,9 @@ export function buildApp(): FastifyInstance {
         { name: "auth", description: "Authentication and API keys" },
         { name: "tests", description: "Test authoring and management" },
         { name: "questions", description: "Question authoring (MCQ)" },
-        { name: "attempts", description: "Candidate attempts (read)" },
+        { name: "invites", description: "Invite-only access management" },
+        { name: "attempts", description: "Candidate attempts & timer" },
+        { name: "public", description: "Candidate-facing endpoints (share link)" },
       ],
       components: {
         securitySchemes: {

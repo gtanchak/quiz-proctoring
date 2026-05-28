@@ -18,6 +18,13 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\"",
+    "test": "vitest run",
     "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.13"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8"
   }
 }

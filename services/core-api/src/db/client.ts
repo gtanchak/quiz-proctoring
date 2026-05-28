@@ -2,14 +2,20 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { config } from "../config.js";
 import { apiKeys } from "./schema/api-keys.js";
-import { attempts, questions, testInvites, tests } from "./schema/tests.js";
+import {
+  attempts,
+  questions,
+  responses,
+  testInvites,
+  tests,
+} from "./schema/tests.js";
 
 /**
  * Drizzle schema object. Table modules are imported directly (rather than via a
  * barrel) so drizzle-kit can read the plain table files without tripping over
  * Node-ESM `.js` import specifiers. Add new tables here as they are created.
  */
-const schema = { apiKeys, tests, questions, attempts, testInvites };
+const schema = { apiKeys, tests, questions, attempts, testInvites, responses };
 
 /**
  * Shared PostgreSQL connection pool. `pg.Pool` connects lazily — constructing

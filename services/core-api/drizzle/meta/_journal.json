@@ -50,6 +50,13 @@
       "when": 1779893763138,
       "tag": "0006_light_bug",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779945838363,
+      "tag": "0007_clear_vengeance",
+      "breakpoints": true
     }
   ]
 }

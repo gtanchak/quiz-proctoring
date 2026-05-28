@@ -3,7 +3,14 @@ import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
 import { and, count, eq, inArray } from "drizzle-orm";
 import type { FastifyRequest } from "fastify";
 import { db } from "../../db/client.js";
-import { attempts, testInvites, tests, type AttemptRow } from "../../db/schema/tests.js";
+import {
+  attempts,
+  type AttemptRow,
+  questions,
+  responses,
+  testInvites,
+  tests,
+} from "../../db/schema/tests.js";
 import {
   generateSessionToken,
   hashSessionToken,
@@ -45,6 +52,32 @@ const StartResponse = Type.Object({
   sessionToken: Type.String(),
   /** True when an existing in-progress attempt was resumed rather than created. */
   resumed: Type.Boolean(),
+});
+
+const AnswersBody = Type.Object(
+  {
+    answers: Type.Array(
+      Type.Object({
+        questionId: Type.String({ format: "uuid" }),
+        selectedOptionIds: Type.Array(Type.String(), { maxItems: 100 }),
+      }),
+      { minItems: 1, maxItems: 500 },
+    ),
+  },
+  { additionalProperties: false },
+);
+
+const ResultResponse = Type.Object({
+  status: Type.String(),
+  score: Type.Union([Type.Number(), Type.Null()]),
+  maxScore: Type.Union([Type.Number(), Type.Null()]),
+  breakdown: Type.Array(
+    Type.Object({
+      questionId: Type.String({ format: "uuid" }),
+      points: Type.Integer(),
+      awardedPoints: Type.Number(),
+    }),
+  ),
 });
 
 /**
@@ -209,6 +242,114 @@ export const publicRoutes: FastifyPluginAsyncTypebox = async (app) => {
     async (request) => {
       const row = await resolveAttemptBySession(request);
       return serializeAttempt(await finalizeAttempt(row));
+    },
+  );
+
+  app.put(
+    "/public/attempt/answers",
+    {
+      schema: {
+        tags: ["public"],
+        summary: "Save/replace answers for the current attempt",
+        security: [{ bearerAuth: [] }],
+        body: AnswersBody,
+        response: {
+          200: Type.Object({ saved: Type.Integer() }),
+          400: Type.Ref("ErrorResponse"),
+          401: Type.Ref("ErrorResponse"),
+          409: Type.Ref("ErrorResponse"),
+        },
+      },
+    },
+    async (request) => {
+      const attempt = await autoExpireIfDue(
+        await resolveAttemptBySession(request),
+      );
+      if (attempt.status !== "in_progress") {
+        throw AppError.conflict("Attempt is not in progress");
+      }
+
+      const validIds = new Set(
+        (
+          await db
+            .select({ id: questions.id })
+            .from(questions)
+            .where(eq(questions.testId, attempt.testId))
+        ).map((q) => q.id),
+      );
+      for (const answer of request.body.answers) {
+        if (!validIds.has(answer.questionId)) {
+          throw AppError.badRequest(
+            `Question ${answer.questionId} does not belong to this test`,
+          );
+        }
+      }
+
+      for (const answer of request.body.answers) {
+        await db
+          .insert(responses)
+          .values({
+            attemptId: attempt.id,
+            questionId: answer.questionId,
+            selectedOptionIds: answer.selectedOptionIds,
+          })
+          .onConflictDoUpdate({
+            target: [responses.attemptId, responses.questionId],
+            set: {
+              selectedOptionIds: answer.selectedOptionIds,
+              updatedAt: new Date(),
+            },
+          });
+      }
+      return { saved: request.body.answers.length };
+    },
+  );
+
+  app.get(
+    "/public/attempt/result",
+    {
+      schema: {
+        tags: ["public"],
+        summary: "Score & per-question breakdown (after submit)",
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: ResultResponse,
+          401: Type.Ref("ErrorResponse"),
+          409: Type.Ref("ErrorResponse"),
+        },
+      },
+    },
+    async (request) => {
+      const attempt = await autoExpireIfDue(
+        await resolveAttemptBySession(request),
+      );
+      if (attempt.status === "in_progress") {
+        throw AppError.conflict("Attempt has not been submitted yet");
+      }
+
+      const [qs, rs] = await Promise.all([
+        db
+          .select({ id: questions.id, points: questions.points })
+          .from(questions)
+          .where(eq(questions.testId, attempt.testId)),
+        db
+          .select()
+          .from(responses)
+          .where(eq(responses.attemptId, attempt.id)),
+      ]);
+      const awarded = new Map(rs.map((r) => [r.questionId, r.awardedPoints]));
+
+      return {
+        status: attempt.status,
+        score: attempt.score,
+        maxScore: attempt.maxScore,
+        // Per-question awarded points — never the correct answers.
+        breakdown: qs.map((q) => ({
+          questionId: q.id,
+          points: q.points,
+          awardedPoints: awarded.get(q.id) ?? 0,
+        })),
+      };
     },
   );
 };

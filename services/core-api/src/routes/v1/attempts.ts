@@ -2,8 +2,14 @@ import { Type } from "@sinclair/typebox";
 import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
 import { and, count, desc, eq } from "drizzle-orm";
 import { db } from "../../db/client.js";
-import { attempts, tests, type AttemptRow } from "../../db/schema/tests.js";
+import {
+  attempts,
+  type AttemptRow,
+  responses,
+  tests,
+} from "../../db/schema/tests.js";
 import { AppError } from "../../lib/errors.js";
+import { gradeAttempt } from "../../lib/grade-attempt.js";
 import { PaginationQuery, paginated } from "../../lib/pagination.js";
 import { findOwnedTest } from "../../lib/test-access.js";
 import { computeDeadline, timerState } from "../../lib/timer.js";
@@ -25,6 +31,9 @@ export const AttemptEntity = Type.Object(
     // Server-computed countdown — the candidate's source of truth for time left.
     remainingMs: Type.Union([Type.Integer(), Type.Null()]),
     expired: Type.Boolean(),
+    // Set once the attempt is graded on finalize (PRO-53).
+    score: Type.Union([Type.Number(), Type.Null()]),
+    maxScore: Type.Union([Type.Number(), Type.Null()]),
     createdAt: Type.String({ format: "date-time" }),
   },
   { $id: "Attempt" },
@@ -42,12 +51,20 @@ export function serializeAttempt(row: AttemptRow, now: Date = new Date()) {
     submittedAt: row.submittedAt?.toISOString() ?? null,
     remainingMs: timer.remainingMs,
     expired: timer.expired,
+    score: row.score,
+    maxScore: row.maxScore,
     createdAt: row.createdAt.toISOString(),
   };
 }
 
 const TestIdParams = Type.Object({ testId: Type.String({ format: "uuid" }) });
 const IdParams = Type.Object({ id: Type.String({ format: "uuid" }) });
+
+const ResponseEntity = Type.Object({
+  questionId: Type.String({ format: "uuid" }),
+  selectedOptionIds: Type.Array(Type.String()),
+  awardedPoints: Type.Union([Type.Number(), Type.Null()]),
+});
 
 /**
  * Attempt lifecycle and the server-authoritative timer.
@@ -175,6 +192,37 @@ export const attemptsRoutes: FastifyPluginAsyncTypebox = async (app) => {
       return serializeAttempt(await finalizeAttempt(row));
     },
   );
+
+  app.get(
+    "/attempts/:id/responses",
+    {
+      schema: {
+        tags: ["attempts"],
+        summary: "Per-question responses & awarded points (admin review)",
+        security: [{ bearerAuth: [] }],
+        params: IdParams,
+        response: {
+          200: Type.Array(ResponseEntity),
+          404: Type.Ref("ErrorResponse"),
+        },
+      },
+    },
+    async (request) => {
+      const attempt = await findOwnedAttempt(
+        request.params.id,
+        request.apiKey!.id,
+      );
+      const rows = await db
+        .select()
+        .from(responses)
+        .where(eq(responses.attemptId, attempt.id));
+      return rows.map((r) => ({
+        questionId: r.questionId,
+        selectedOptionIds: r.selectedOptionIds,
+        awardedPoints: r.awardedPoints,
+      }));
+    },
+  );
 };
 
 /**
@@ -200,7 +248,7 @@ export async function finalizeAttempt(row: AttemptRow): Promise<AttemptRow> {
   if (!updated) {
     throw AppError.conflict("Attempt is already finalized");
   }
-  return updated;
+  return gradeAttempt(updated);
 }
 
 /** Loads an attempt whose test is owned by the given key, or throws 404. */
@@ -237,5 +285,7 @@ export async function autoExpireIfDue(row: AttemptRow): Promise<AttemptRow> {
     .set({ status: "expired", submittedAt: new Date() })
     .where(and(eq(attempts.id, row.id), eq(attempts.status, "in_progress")))
     .returning();
-  return updated ?? row;
+  // Grade what was saved before the deadline; if a concurrent finalize won the
+  // race (no row updated), leave grading to that path.
+  return updated ? await gradeAttempt(updated) : row;
 }

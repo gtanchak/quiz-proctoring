@@ -60,7 +60,12 @@ export const authPlugin = fp(
     app.decorateRequest("apiKey", null);
 
     app.addHook("onRequest", async (request) => {
-      if (request.url === "/v1" || request.url.startsWith("/v1/")) {
+      const path = request.url.split("?")[0];
+      const isV1 = path === "/v1" || path.startsWith("/v1/");
+      // /v1/public/* is the candidate-facing surface — no admin API key; those
+      // routes authenticate candidates themselves (link token or session token).
+      const isPublic = path === "/v1/public" || path.startsWith("/v1/public/");
+      if (isV1 && !isPublic) {
         await authenticate(request);
       }
     });

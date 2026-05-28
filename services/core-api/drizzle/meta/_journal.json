@@ -43,6 +43,13 @@
       "when": 1779886711279,
       "tag": "0005_tranquil_maverick",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779893763138,
+      "tag": "0006_light_bug",
+      "breakpoints": true
     }
   ]
 }

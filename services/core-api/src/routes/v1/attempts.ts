@@ -172,28 +172,36 @@ export const attemptsRoutes: FastifyPluginAsyncTypebox = async (app) => {
     },
     async (request) => {
       const row = await findOwnedAttempt(request.params.id, request.apiKey!.id);
-      if (row.status !== "in_progress") {
-        throw AppError.conflict("Attempt is already finalized");
-      }
-      const now = new Date();
-      // A submit after the deadline is recorded as an expiry, not a clean submit.
-      const finalStatus =
-        row.deadlineAt && now.getTime() >= row.deadlineAt.getTime()
-          ? "expired"
-          : "submitted";
-
-      const [updated] = await db
-        .update(attempts)
-        .set({ status: finalStatus, submittedAt: now })
-        .where(and(eq(attempts.id, row.id), eq(attempts.status, "in_progress")))
-        .returning();
-      if (!updated) {
-        throw AppError.conflict("Attempt is already finalized");
-      }
-      return serializeAttempt(updated, now);
+      return serializeAttempt(await finalizeAttempt(row));
     },
   );
 };
+
+/**
+ * Submits and locks an in-progress attempt. A submit past the deadline is
+ * recorded as an expiry, not a clean submit. The WHERE re-checks status so a
+ * concurrent submit/expiry can't double-finalize. Shared by the admin and
+ * candidate (public) submit routes.
+ */
+export async function finalizeAttempt(row: AttemptRow): Promise<AttemptRow> {
+  if (row.status !== "in_progress") {
+    throw AppError.conflict("Attempt is already finalized");
+  }
+  const now = new Date();
+  const finalStatus =
+    row.deadlineAt && now.getTime() >= row.deadlineAt.getTime()
+      ? "expired"
+      : "submitted";
+  const [updated] = await db
+    .update(attempts)
+    .set({ status: finalStatus, submittedAt: now })
+    .where(and(eq(attempts.id, row.id), eq(attempts.status, "in_progress")))
+    .returning();
+  if (!updated) {
+    throw AppError.conflict("Attempt is already finalized");
+  }
+  return updated;
+}
 
 /** Loads an attempt whose test is owned by the given key, or throws 404. */
 async function findOwnedAttempt(
@@ -217,7 +225,7 @@ async function findOwnedAttempt(
  * locked. Idempotent and race-safe (the WHERE re-checks status). Returns the
  * (possibly updated) row.
  */
-async function autoExpireIfDue(row: AttemptRow): Promise<AttemptRow> {
+export async function autoExpireIfDue(row: AttemptRow): Promise<AttemptRow> {
   if (row.status !== "in_progress" || !row.deadlineAt) {
     return row;
   }

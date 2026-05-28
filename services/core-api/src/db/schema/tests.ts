@@ -6,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -25,6 +26,9 @@ export const testStatus = pgEnum("test_status", [
   "archived",
 ]);
 
+/** Who can open a test's share link: anyone with the link, or invited emails. */
+export const accessMode = pgEnum("access_mode", ["open", "invite"]);
+
 export const tests = pgTable("tests", {
   id: uuid("id").primaryKey().defaultRandom(),
   ownerKeyId: uuid("owner_key_id").notNull(),
@@ -32,6 +36,10 @@ export const tests = pgTable("tests", {
   description: text("description"),
   instructions: text("instructions"),
   status: testStatus("status").notNull().default("draft"),
+  // Shareable link id (opaque). Set at creation; the link only admits
+  // candidates once the test is published and within its availability window.
+  accessToken: text("access_token").unique(),
+  accessMode: accessMode("access_mode").notNull().default("open"),
   durationMinutes: integer("duration_minutes"),
   // Availability window (when candidates may take the test).
   availableFrom: timestamp("available_from", { withTimezone: true }),
@@ -112,6 +120,9 @@ export const attempts = pgTable("attempts", {
     .references(() => tests.id, { onDelete: "cascade" }),
   candidateEmail: text("candidate_email"),
   status: attemptStatus("status").notNull().default("in_progress"),
+  // Hashed per-attempt candidate session credential (PRO-8). The raw token is
+  // returned once when a candidate starts/resumes via a public link.
+  sessionTokenHash: text("session_token_hash"),
   startedAt: timestamp("started_at", { withTimezone: true }),
   // When the attempt's time expires. Computed server-side at start from the
   // test duration; null means untimed. The single source of truth for the timer.
@@ -122,6 +133,26 @@ export const attempts = pgTable("attempts", {
     .defaultNow(),
 });
 
+/**
+ * Allow-list of candidate emails for invite-only tests (PRO-8). Unused for
+ * open-access tests. One row per (test, email).
+ */
+export const testInvites = pgTable(
+  "test_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    testId: uuid("test_id")
+      .notNull()
+      .references(() => tests.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [unique("test_invites_test_email_unique").on(t.testId, t.email)],
+);
+
 export type TestRow = typeof tests.$inferSelect;
 export type QuestionRow = typeof questions.$inferSelect;
 export type AttemptRow = typeof attempts.$inferSelect;
+export type TestInviteRow = typeof testInvites.$inferSelect;

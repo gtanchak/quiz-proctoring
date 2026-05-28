@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { Type } from "@sinclair/typebox";
 import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
 import { and, asc, count, desc, eq } from "drizzle-orm";
@@ -12,6 +13,13 @@ const TestStatus = Type.Union([
   Type.Literal("published"),
   Type.Literal("archived"),
 ]);
+
+const AccessMode = Type.Union([Type.Literal("open"), Type.Literal("invite")]);
+
+/** Opaque shareable-link id, generated once per test at creation. */
+function generateAccessToken(): string {
+  return randomBytes(16).toString("base64url");
+}
 
 const TestEntity = Type.Object(
   {
@@ -29,6 +37,8 @@ const TestEntity = Type.Object(
     maxAttempts: Type.Integer(),
     passMark: Type.Union([Type.Integer(), Type.Null()]),
     negativeMarking: Type.Boolean(),
+    accessMode: AccessMode,
+    accessToken: Type.Union([Type.String(), Type.Null()]),
     createdAt: Type.String({ format: "date-time" }),
     updatedAt: Type.String({ format: "date-time" }),
   },
@@ -48,6 +58,8 @@ function serializeTest(row: TestRow) {
     maxAttempts: row.maxAttempts,
     passMark: row.passMark,
     negativeMarking: row.negativeMarking,
+    accessMode: row.accessMode,
+    accessToken: row.accessToken,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -65,6 +77,7 @@ const CreateTestBody = Type.Object(
     maxAttempts: Type.Optional(Type.Integer({ minimum: 1 })),
     passMark: Type.Optional(Type.Integer({ minimum: 0 })),
     negativeMarking: Type.Optional(Type.Boolean()),
+    accessMode: Type.Optional(AccessMode),
   },
   { additionalProperties: false },
 );
@@ -130,6 +143,8 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
           maxAttempts: body.maxAttempts,
           passMark: body.passMark,
           negativeMarking: body.negativeMarking,
+          accessMode: body.accessMode,
+          accessToken: generateAccessToken(),
         })
         .returning();
       reply.status(201);
@@ -254,6 +269,7 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
           ...(body.negativeMarking !== undefined && {
             negativeMarking: body.negativeMarking,
           }),
+          ...(body.accessMode !== undefined && { accessMode: body.accessMode }),
           updatedAt: new Date(),
         })
         .where(eq(tests.id, existing.id))

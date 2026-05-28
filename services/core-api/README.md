@@ -96,6 +96,7 @@ not require a database connection.
 | GET | `/v1/tests/:id/attempts` | List a test's attempts |
 | GET | `/v1/attempts/:id` | Read an attempt (auto-submits if past deadline) |
 | POST | `/v1/attempts/:id/submit` | Submit and lock an attempt |
+| GET | `/v1/attempts/:id/responses` | Per-question responses & awarded points (review) |
 
 ### Candidate (public) endpoints — no admin key
 
@@ -104,7 +105,9 @@ not require a database connection.
 | GET | `/v1/public/tests/:token` | Landing info + link state (`not_yet_open`/`open`/`closed`) |
 | POST | `/v1/public/tests/:token/start` | Start (201) or resume (200) an attempt; returns a session token |
 | GET | `/v1/public/attempt` | Read the current attempt (session-token auth) |
+| PUT | `/v1/public/attempt/answers` | Save/replace answers (in-progress only) |
 | POST | `/v1/public/attempt/submit` | Submit the current attempt (session-token auth) |
+| GET | `/v1/public/attempt/result` | Score + per-question breakdown (after submit) |
 
 A test carries config: `durationMinutes`, `availableFrom`/`availableUntil`
 window, `maxAttempts`, scoring (`passMark`, `negativeMarking`), and
@@ -139,10 +142,22 @@ availability window (`linkState` in `src/lib/access.ts`). Access is `open`
 Candidates authenticate via the `/v1/public/*` surface (excluded from the admin
 auth hook): the landing is open; starting an attempt issues a per-attempt
 **session token** (hashed at rest, returned once), which authorizes the
-poll/submit endpoints. Starting enforces the link state, invite allow-list, and
-`max_attempts`, and **resumes** an existing in-progress attempt (re-issuing a
-session token) rather than creating a duplicate. The candidate landing/countdown
-UI lives in candidate-web.
+poll/answers/submit endpoints. Starting enforces the link state, invite
+allow-list, and `max_attempts`, and **resumes** an existing in-progress attempt
+(re-issuing a session token) rather than creating a duplicate. The candidate
+landing/countdown UI lives in candidate-web.
+
+### Answer capture & auto-grading (PRO-53)
+
+During an in-progress attempt a candidate saves answers via
+`PUT /v1/public/attempt/answers` (one `responses` row per question, upserted).
+On **submit** — and on deadline **auto-expiry** — the attempt is graded:
+`src/lib/grade-attempt.ts` runs each saved answer through `gradeMcq` and persists
+per-response `awarded_points` plus the attempt's `score`/`max_score`. Candidates
+read their `score` + per-question breakdown at `/v1/public/attempt/result`
+(never the correct answers); admins review responses at
+`/v1/attempts/:id/responses`. Unanswered questions score 0 but still count toward
+`max_score`.
 
 All `/v1` resources are scoped to the calling API key; another tenant's rows
 return `404`.

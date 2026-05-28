@@ -4,6 +4,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  real,
   text,
   timestamp,
   unique,
@@ -128,6 +129,12 @@ export const attempts = pgTable("attempts", {
   // test duration; null means untimed. The single source of truth for the timer.
   deadlineAt: timestamp("deadline_at", { withTimezone: true }),
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  // Set when the attempt is graded on finalize (PRO-53). score is the sum of
+  // awarded points (may be fractional with partial credit); maxScore is the sum
+  // of all question points.
+  score: real("score"),
+  maxScore: real("max_score"),
+  gradedAt: timestamp("graded_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -152,7 +159,38 @@ export const testInvites = pgTable(
   (t) => [unique("test_invites_test_email_unique").on(t.testId, t.email)],
 );
 
+/**
+ * A candidate's answer to one question within an attempt (PRO-53). Co-located
+ * here because of its FKs to attempts and questions. `awardedPoints` is filled
+ * in when the attempt is graded on finalize.
+ */
+export const responses = pgTable(
+  "responses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => questions.id, { onDelete: "cascade" }),
+    selectedOptionIds: jsonb("selected_option_ids")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    awardedPoints: real("awarded_points"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [unique("responses_attempt_question_unique").on(t.attemptId, t.questionId)],
+);
+
 export type TestRow = typeof tests.$inferSelect;
 export type QuestionRow = typeof questions.$inferSelect;
 export type AttemptRow = typeof attempts.$inferSelect;
 export type TestInviteRow = typeof testInvites.$inferSelect;
+export type ResponseRow = typeof responses.$inferSelect;

@@ -11,6 +11,7 @@
  */
 
 export * from "./violations.js";
+export * from "./detectors/index.js";
 
 export const SDK_VERSION = "0.0.0" as const;
 

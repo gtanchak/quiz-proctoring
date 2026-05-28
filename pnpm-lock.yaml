@@ -80,9 +80,21 @@ importers:
         specifier: ^6.0.7
         version: 6.4.2(@types/node@22.19.19)(tsx@4.22.3)(yaml@2.9.0)
 
-  packages/proctoring-sdk: {}
+  packages/proctoring-sdk:
+    dependencies:
+      '@proctoring/shared':
+        specifier: workspace:*
+        version: link:../shared
 
-  packages/shared: {}
+  packages/shared:
+    dependencies:
+      '@sinclair/typebox':
+        specifier: ^0.34.13
+        version: 0.34.49
+    devDependencies:
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.19)
 
   packages/ui-components: {}
 

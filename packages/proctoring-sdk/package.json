@@ -19,5 +19,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\"",
     "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@proctoring/shared": "workspace:*"
   }
 }

@@ -6,8 +6,11 @@
  * discrete violation events and periodic snapshots are uploaded — never a
  * continuous webcam stream.
  *
- * This is the PRO-46 skeleton — no detector logic yet.
+ * This is the PRO-46 skeleton — no detector logic yet, but violation events are
+ * built and validated against the shared schema (PRO-50).
  */
+
+export * from "./violations.js";
 
 export const SDK_VERSION = "0.0.0" as const;
 

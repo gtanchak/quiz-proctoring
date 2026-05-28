@@ -59,6 +59,33 @@ count-threshold / auto-submit behaviour is **PRO-19**; this detector only emits.
 - A `blur` that is immediately followed by the tab being hidden is reclassified
   as a `tab_switch` (no double counting).
 
+### FullscreenController (PRO-17)
+
+Enforces running the test in fullscreen and logs `fullscreen_exit` violations.
+The SDK renders no UI, so it exposes controls + callbacks and the **host
+(candidate-web) owns the prompt/pause UX**:
+
+```ts
+const fs = new FullscreenController(
+  { attemptId, emit: (e) => queue.push(e) },
+  {
+    onExit: () => showReturnToFullscreenOverlay(), // host prompt (and pause, if configured)
+    onEnter: () => hideOverlay(),
+  },
+);
+fs.start();
+startButton.addEventListener("click", () => fs.enter()); // MUST be a user gesture
+```
+
+- `enter()` / `exit()` / `isFullscreen()`; emits `fullscreen_exit` (with
+  timestamp) when the candidate leaves fullscreen.
+- `config.required` (default `true`) — when `false`, the controller stays passive.
+- **Limits:** entering/re-entering fullscreen **requires a user gesture** — a
+  page cannot silently force it back, so the host must call `enter()` from a
+  click. Exit (Esc / F11 / OS gestures) cannot be blocked by the page; the
+  enforcement is detect + prompt, not prevention. Exit count thresholds /
+  auto-submit are **PRO-19**.
+
 ## Scripts
 
 ```bash

@@ -14,6 +14,8 @@ export * from "./violations.js";
 export * from "./detectors/index.js";
 // Pre-test device permission flow & environment check (PRO-14).
 export * from "./preflight/index.js";
+// Periodic webcam/screen snapshot capture (PRO-15).
+export * from "./capture/index.js";
 
 export const SDK_VERSION = "0.1.0" as const;
 

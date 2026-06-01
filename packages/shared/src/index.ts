@@ -7,7 +7,7 @@
  */
 
 /** Semantic version of the shared contract surface. */
-export const SHARED_CONTRACT_VERSION = "0.2.0" as const;
+export const SHARED_CONTRACT_VERSION = "0.3.0" as const;
 
 /** Marker confirming the shared package resolved at runtime (used by stubs). */
 export const sharedPackageName = "@proctoring/shared" as const;
@@ -20,3 +20,6 @@ export * from "./auth/index.js";
 
 // Proctoring requirements: which signals a test requires pre-start (PRO-14).
 export * from "./proctoring/index.js";
+
+// Evidence capture contract: snapshot config + per-image metadata (PRO-15).
+export * from "./evidence/index.js";

@@ -1,18 +1,15 @@
-import { eq, inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { db, pool } from "../src/db/client.js";
-import { apiKeys } from "../src/db/schema/api-keys.js";
-import { attempts, questions, tests } from "../src/db/schema/tests.js";
-import { generateApiKey } from "../src/lib/api-key.js";
+import { attempts, questions } from "../src/db/schema/tests.js";
+import { type SeededKey, cleanupOrgs, seedOrgWithKey } from "./helpers/seed.js";
 
 describe("test configuration & publish lifecycle", () => {
   let app: FastifyInstance;
-  let token: string;
-  let keyId: string;
+  let seeded: SeededKey;
 
-  const auth = () => ({ authorization: `Bearer ${token}` });
+  const auth = () => ({ authorization: `Bearer ${seeded.token}` });
 
   const createTest = async (payload: Record<string, unknown>) =>
     app.inject({ method: "POST", url: "/v1/tests", headers: auth(), payload });
@@ -20,18 +17,11 @@ describe("test configuration & publish lifecycle", () => {
   beforeAll(async () => {
     app = buildApp();
     await app.ready();
-    const key = generateApiKey();
-    token = key.token;
-    const [row] = await db
-      .insert(apiKeys)
-      .values({ name: "lifecycle", keyPrefix: key.prefix, keyHash: key.hash })
-      .returning({ id: apiKeys.id });
-    keyId = row.id;
+    seeded = await seedOrgWithKey("lifecycle");
   });
 
   afterAll(async () => {
-    await db.delete(tests).where(eq(tests.ownerKeyId, keyId));
-    await db.delete(apiKeys).where(inArray(apiKeys.id, [keyId]));
+    await cleanupOrgs([seeded.orgId]);
     await app.close();
     await pool.end();
   });

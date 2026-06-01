@@ -8,8 +8,9 @@ import {
   questions,
   type QuestionRow,
 } from "../../db/schema/tests.js";
+import { requireWrite } from "../../lib/authz.js";
 import { AppError } from "../../lib/errors.js";
-import { assertTestMutable, findOwnedTest } from "../../lib/test-access.js";
+import { assertTestMutable, findOrgTest } from "../../lib/test-access.js";
 
 const QuestionType = Type.Union([
   Type.Literal("mcq_single"),
@@ -137,6 +138,7 @@ export const questionsRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.post(
     "/tests/:testId/questions",
     {
+      preHandler: requireWrite,
       schema: {
         tags: ["questions"],
         summary: "Add an MCQ question to a test",
@@ -146,13 +148,14 @@ export const questionsRoutes: FastifyPluginAsyncTypebox = async (app) => {
         response: {
           201: QuestionEntity,
           400: Type.Ref("ErrorResponse"),
+          403: Type.Ref("ErrorResponse"),
           404: Type.Ref("ErrorResponse"),
           409: Type.Ref("ErrorResponse"),
         },
       },
     },
     async (request, reply) => {
-      const test = await findOwnedTest(request.params.testId, request.apiKey!.id);
+      const test = await findOrgTest(request.params.testId, request.auth!.orgId);
       await assertTestMutable(test);
 
       const body = request.body;
@@ -205,7 +208,7 @@ export const questionsRoutes: FastifyPluginAsyncTypebox = async (app) => {
       },
     },
     async (request) => {
-      const test = await findOwnedTest(request.params.testId, request.apiKey!.id);
+      const test = await findOrgTest(request.params.testId, request.auth!.orgId);
       const rows = await db
         .select()
         .from(questions)
@@ -227,7 +230,7 @@ export const questionsRoutes: FastifyPluginAsyncTypebox = async (app) => {
       },
     },
     async (request) => {
-      await findOwnedTest(request.params.testId, request.apiKey!.id);
+      await findOrgTest(request.params.testId, request.auth!.orgId);
       return serializeQuestion(await findQuestion(request.params));
     },
   );
@@ -235,6 +238,7 @@ export const questionsRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.patch(
     "/tests/:testId/questions/:questionId",
     {
+      preHandler: requireWrite,
       schema: {
         tags: ["questions"],
         summary: "Update a question",
@@ -244,15 +248,16 @@ export const questionsRoutes: FastifyPluginAsyncTypebox = async (app) => {
         response: {
           200: QuestionEntity,
           400: Type.Ref("ErrorResponse"),
+          403: Type.Ref("ErrorResponse"),
           404: Type.Ref("ErrorResponse"),
           409: Type.Ref("ErrorResponse"),
         },
       },
     },
     async (request) => {
-      const test = await findOwnedTest(
+      const test = await findOrgTest(
         request.params.testId,
-        request.apiKey!.id,
+        request.auth!.orgId,
       );
       await assertTestMutable(test);
       const existing = await findQuestion(request.params);
@@ -299,6 +304,7 @@ export const questionsRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.delete(
     "/tests/:testId/questions/:questionId",
     {
+      preHandler: requireWrite,
       schema: {
         tags: ["questions"],
         summary: "Delete a question",
@@ -306,15 +312,16 @@ export const questionsRoutes: FastifyPluginAsyncTypebox = async (app) => {
         params: QuestionParams,
         response: {
           204: Type.Null(),
+          403: Type.Ref("ErrorResponse"),
           404: Type.Ref("ErrorResponse"),
           409: Type.Ref("ErrorResponse"),
         },
       },
     },
     async (request, reply) => {
-      const test = await findOwnedTest(
+      const test = await findOrgTest(
         request.params.testId,
-        request.apiKey!.id,
+        request.auth!.orgId,
       );
       await assertTestMutable(test);
       const existing = await findQuestion(request.params);

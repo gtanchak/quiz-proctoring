@@ -3,8 +3,9 @@ import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { testInvites, type TestInviteRow } from "../../db/schema/tests.js";
+import { requireWrite } from "../../lib/authz.js";
 import { AppError } from "../../lib/errors.js";
-import { findOwnedTest } from "../../lib/test-access.js";
+import { findOrgTest } from "../../lib/test-access.js";
 
 const InviteEntity = Type.Object(
   {
@@ -41,6 +42,7 @@ export const invitesRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.post(
     "/tests/:testId/invites",
     {
+      preHandler: requireWrite,
       schema: {
         tags: ["invites"],
         summary: "Invite a candidate email",
@@ -49,13 +51,14 @@ export const invitesRoutes: FastifyPluginAsyncTypebox = async (app) => {
         body: Type.Object({ email: Type.String({ format: "email" }) }),
         response: {
           201: InviteEntity,
+          403: Type.Ref("ErrorResponse"),
           404: Type.Ref("ErrorResponse"),
           409: Type.Ref("ErrorResponse"),
         },
       },
     },
     async (request, reply) => {
-      const test = await findOwnedTest(request.params.testId, request.apiKey!.id);
+      const test = await findOrgTest(request.params.testId, request.auth!.orgId);
       const email = request.body.email.trim().toLowerCase();
 
       const [row] = await db
@@ -88,7 +91,7 @@ export const invitesRoutes: FastifyPluginAsyncTypebox = async (app) => {
       },
     },
     async (request) => {
-      const test = await findOwnedTest(request.params.testId, request.apiKey!.id);
+      const test = await findOrgTest(request.params.testId, request.auth!.orgId);
       const rows = await db
         .select()
         .from(testInvites)
@@ -101,6 +104,7 @@ export const invitesRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.delete(
     "/tests/:testId/invites/:inviteId",
     {
+      preHandler: requireWrite,
       schema: {
         tags: ["invites"],
         summary: "Remove a candidate invite",
@@ -108,12 +112,13 @@ export const invitesRoutes: FastifyPluginAsyncTypebox = async (app) => {
         params: InviteParams,
         response: {
           204: Type.Null(),
+          403: Type.Ref("ErrorResponse"),
           404: Type.Ref("ErrorResponse"),
         },
       },
     },
     async (request, reply) => {
-      const test = await findOwnedTest(request.params.testId, request.apiKey!.id);
+      const test = await findOrgTest(request.params.testId, request.auth!.orgId);
       const [row] = await db
         .delete(testInvites)
         .where(

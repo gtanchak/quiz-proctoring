@@ -4,9 +4,10 @@ import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
 import { and, asc, count, desc, eq } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { questions, tests, type TestRow } from "../../db/schema/tests.js";
+import { requireWrite } from "../../lib/authz.js";
 import { AppError } from "../../lib/errors.js";
 import { PaginationQuery, paginated } from "../../lib/pagination.js";
-import { assertTestMutable, findOwnedTest } from "../../lib/test-access.js";
+import { assertTestMutable, findOrgTest } from "../../lib/test-access.js";
 
 const TestStatus = Type.Union([
   Type.Literal("draft"),
@@ -107,19 +108,25 @@ const IdParams = Type.Object({ id: Type.String({ format: "uuid" }) });
 
 /**
  * Tests CRUD, the publish lifecycle, and nested attempts listing. Every row is
- * scoped to the calling API key (`ownerKeyId`): an unowned or missing row
- * returns 404, never 403, to avoid leaking existence across tenants.
+ * scoped to the calling actor's organization (`orgId`): a row in another org or
+ * a missing row returns 404, never 403, to avoid leaking existence across
+ * tenants. Mutations additionally require a write role (`requireWrite`).
  */
 export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.post(
     "/tests",
     {
+      preHandler: requireWrite,
       schema: {
         tags: ["tests"],
         summary: "Create a test (draft)",
         security: [{ bearerAuth: [] }],
         body: CreateTestBody,
-        response: { 201: TestEntity, 400: Type.Ref("ErrorResponse") },
+        response: {
+          201: TestEntity,
+          400: Type.Ref("ErrorResponse"),
+          403: Type.Ref("ErrorResponse"),
+        },
       },
     },
     async (request, reply) => {
@@ -133,7 +140,7 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
       const [row] = await db
         .insert(tests)
         .values({
-          ownerKeyId: request.apiKey!.id,
+          orgId: request.auth!.orgId,
           title: body.title,
           description: body.description,
           instructions: body.instructions,
@@ -166,8 +173,8 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
     async (request) => {
       const { limit, offset, status, sort, order } = request.query;
       const where = status
-        ? and(eq(tests.ownerKeyId, request.apiKey!.id), eq(tests.status, status))
-        : eq(tests.ownerKeyId, request.apiKey!.id);
+        ? and(eq(tests.orgId, request.auth!.orgId), eq(tests.status, status))
+        : eq(tests.orgId, request.auth!.orgId);
 
       const column = sort === "title" ? tests.title : tests.createdAt;
       const direction = order === "asc" ? asc(column) : desc(column);
@@ -202,7 +209,7 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
       },
     },
     async (request) => {
-      const row = await findOwnedTest(request.params.id, request.apiKey!.id);
+      const row = await findOrgTest(request.params.id, request.auth!.orgId);
       return serializeTest(row);
     },
   );
@@ -210,6 +217,7 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.patch(
     "/tests/:id",
     {
+      preHandler: requireWrite,
       schema: {
         tags: ["tests"],
         summary: "Update a test",
@@ -219,15 +227,16 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
         response: {
           200: TestEntity,
           400: Type.Ref("ErrorResponse"),
+          403: Type.Ref("ErrorResponse"),
           404: Type.Ref("ErrorResponse"),
           409: Type.Ref("ErrorResponse"),
         },
       },
     },
     async (request) => {
-      const existing = await findOwnedTest(
+      const existing = await findOrgTest(
         request.params.id,
-        request.apiKey!.id,
+        request.auth!.orgId,
       );
       await assertTestMutable(existing);
 
@@ -281,6 +290,7 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.delete(
     "/tests/:id",
     {
+      preHandler: requireWrite,
       schema: {
         tags: ["tests"],
         summary: "Delete a test",
@@ -288,15 +298,16 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
         params: IdParams,
         response: {
           204: Type.Null(),
+          403: Type.Ref("ErrorResponse"),
           404: Type.Ref("ErrorResponse"),
           409: Type.Ref("ErrorResponse"),
         },
       },
     },
     async (request, reply) => {
-      const existing = await findOwnedTest(
+      const existing = await findOrgTest(
         request.params.id,
-        request.apiKey!.id,
+        request.auth!.orgId,
       );
       await assertTestMutable(existing);
       await db.delete(tests).where(eq(tests.id, existing.id));
@@ -308,6 +319,7 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.post(
     "/tests/:id/publish",
     {
+      preHandler: requireWrite,
       schema: {
         tags: ["tests"],
         summary: "Publish a test",
@@ -317,13 +329,14 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
         params: IdParams,
         response: {
           200: TestEntity,
+          403: Type.Ref("ErrorResponse"),
           404: Type.Ref("ErrorResponse"),
           409: Type.Ref("ErrorResponse"),
         },
       },
     },
     async (request) => {
-      const test = await findOwnedTest(request.params.id, request.apiKey!.id);
+      const test = await findOrgTest(request.params.id, request.auth!.orgId);
 
       assertValidWindow(test.availableFrom, test.availableUntil);
 
@@ -347,6 +360,7 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.post(
     "/tests/:id/unpublish",
     {
+      preHandler: requireWrite,
       schema: {
         tags: ["tests"],
         summary: "Unpublish a test (back to draft)",
@@ -354,13 +368,14 @@ export const testsRoutes: FastifyPluginAsyncTypebox = async (app) => {
         params: IdParams,
         response: {
           200: TestEntity,
+          403: Type.Ref("ErrorResponse"),
           404: Type.Ref("ErrorResponse"),
           409: Type.Ref("ErrorResponse"),
         },
       },
     },
     async (request) => {
-      const test = await findOwnedTest(request.params.id, request.apiKey!.id);
+      const test = await findOrgTest(request.params.id, request.auth!.orgId);
       await assertTestMutable(test);
       const [row] = await db
         .update(tests)

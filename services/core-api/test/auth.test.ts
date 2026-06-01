@@ -4,28 +4,20 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { db, pool } from "../src/db/client.js";
 import { apiKeys } from "../src/db/schema/api-keys.js";
-import { generateApiKey } from "../src/lib/api-key.js";
+import { type SeededKey, cleanupOrgs, seedOrgWithKey } from "./helpers/seed.js";
 
 describe("API-key auth on /v1", () => {
   let app: FastifyInstance;
-  let token: string;
-  let keyId: string;
+  let seeded: SeededKey;
 
   beforeAll(async () => {
     app = buildApp();
     await app.ready();
-
-    const key = generateApiKey();
-    token = key.token;
-    const [row] = await db
-      .insert(apiKeys)
-      .values({ name: "test-key", keyPrefix: key.prefix, keyHash: key.hash })
-      .returning({ id: apiKeys.id });
-    keyId = row.id;
+    seeded = await seedOrgWithKey("test-key");
   });
 
   afterAll(async () => {
-    await db.delete(apiKeys).where(eq(apiKeys.id, keyId));
+    await cleanupOrgs([seeded.orgId]);
     await app.close();
     await pool.end();
   });
@@ -45,21 +37,25 @@ describe("API-key auth on /v1", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("accepts a valid key and returns its identity", async () => {
+  it("accepts a valid key and returns its identity as an apiKey actor", async () => {
     const res = await app.inject({
       method: "GET",
       url: "/v1/me",
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seeded.token}` },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ id: keyId, name: "test-key" });
+    expect(res.json()).toEqual({
+      actorType: "apiKey",
+      orgId: seeded.orgId,
+      apiKey: { id: seeded.keyId, name: "test-key" },
+    });
   });
 
   it("exposes rate-limit headers", async () => {
     const res = await app.inject({
       method: "GET",
       url: "/v1/me",
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seeded.token}` },
     });
     expect(res.headers["x-ratelimit-limit"]).toBeDefined();
     expect(res.headers["x-ratelimit-remaining"]).toBeDefined();
@@ -69,12 +65,12 @@ describe("API-key auth on /v1", () => {
     await db
       .update(apiKeys)
       .set({ revokedAt: new Date() })
-      .where(eq(apiKeys.id, keyId));
+      .where(eq(apiKeys.id, seeded.keyId));
 
     const res = await app.inject({
       method: "GET",
       url: "/v1/me",
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seeded.token}` },
     });
     expect(res.statusCode).toBe(401);
   });

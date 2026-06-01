@@ -10,6 +10,13 @@ export default defineConfig({
       NODE_ENV: "test",
       DATABASE_URL:
         "postgres://proctoring:proctoring@localhost:5432/proctoring_test",
+      // Cheap scrypt parameters so password hashing doesn't slow the suite.
+      SCRYPT_N: "1024",
+      SCRYPT_R: "8",
+      SCRYPT_P: "1",
+      // Short TTLs are fine for tests; sessions are exercised directly.
+      SESSION_TTL: "3600",
+      SESSION_ABS_TTL: "7200",
     },
   },
 });

@@ -27,6 +27,24 @@ const ConfigSchema = Type.Object({
   RATE_LIMIT_MAX: Type.Number({ default: 100 }),
   /** Rate-limit window, e.g. "1 minute", "15 seconds". */
   RATE_LIMIT_WINDOW: Type.String({ default: "1 minute" }),
+
+  // --- Accounts & auth (PRO-39) ---------------------------------------------
+  /** Sliding session lifetime in seconds (refreshed on use). Default 7 days. */
+  SESSION_TTL: Type.Number({ default: 60 * 60 * 24 * 7 }),
+  /** Absolute session cap in seconds — a session can never outlive this. Default 30 days. */
+  SESSION_ABS_TTL: Type.Number({ default: 60 * 60 * 24 * 30 }),
+  /** Email-verification token lifetime in seconds. Default 24 hours. */
+  EMAIL_VERIFICATION_TTL: Type.Number({ default: 60 * 60 * 24 }),
+  /** Password-reset token lifetime in seconds. Default 1 hour. */
+  PASSWORD_RESET_TTL: Type.Number({ default: 60 * 60 }),
+  /** Base URL of the admin web app, used to build verify/reset links in emails. */
+  APP_BASE_URL: Type.String({ default: "http://localhost:5174" }),
+  /** From-address for outbound account emails. */
+  EMAIL_FROM: Type.String({ default: "no-reply@proctoring.local" }),
+  /** scrypt cost parameters. Lowered in the test env for speed (see vitest.config). */
+  SCRYPT_N: Type.Number({ default: 16384 }),
+  SCRYPT_R: Type.Number({ default: 8 }),
+  SCRYPT_P: Type.Number({ default: 1 }),
 });
 
 export type Config = Static<typeof ConfigSchema>;

@@ -1,27 +1,16 @@
-import { inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { db, pool } from "../src/db/client.js";
-import { apiKeys } from "../src/db/schema/api-keys.js";
-import { attempts, tests } from "../src/db/schema/tests.js";
-import { generateApiKey } from "../src/lib/api-key.js";
+import { attempts } from "../src/db/schema/tests.js";
+import { type SeededKey, cleanupOrgs, seedOrgWithKey } from "./helpers/seed.js";
 
 describe("attempt lifecycle & server-authoritative timer", () => {
   let app: FastifyInstance;
-  let ownerA: { token: string; id: string };
-  let ownerB: { token: string; id: string };
+  let ownerA: SeededKey;
+  let ownerB: SeededKey;
 
   const auth = (t: string) => ({ authorization: `Bearer ${t}` });
-
-  async function seedKey(name: string) {
-    const key = generateApiKey();
-    const [row] = await db
-      .insert(apiKeys)
-      .values({ name, keyPrefix: key.prefix, keyHash: key.hash })
-      .returning({ id: apiKeys.id });
-    return { token: key.token, id: row.id };
-  }
 
   /** Creates a published test (with one question) owned by ownerA. */
   async function publishedTest(durationMinutes?: number): Promise<string> {
@@ -57,13 +46,12 @@ describe("attempt lifecycle & server-authoritative timer", () => {
   beforeAll(async () => {
     app = buildApp();
     await app.ready();
-    ownerA = await seedKey("attempt-owner-a");
-    ownerB = await seedKey("attempt-owner-b");
+    ownerA = await seedOrgWithKey("attempt-owner-a");
+    ownerB = await seedOrgWithKey("attempt-owner-b");
   });
 
   afterAll(async () => {
-    await db.delete(tests).where(inArray(tests.ownerKeyId, [ownerA.id, ownerB.id]));
-    await db.delete(apiKeys).where(inArray(apiKeys.id, [ownerA.id, ownerB.id]));
+    await cleanupOrgs([ownerA.orgId, ownerB.orgId]);
     await app.close();
     await pool.end();
   });

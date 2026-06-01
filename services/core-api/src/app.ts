@@ -39,7 +39,8 @@ export function buildApp(): FastifyInstance {
       servers: [{ url: "/" }],
       tags: [
         { name: "system", description: "Health and operational endpoints" },
-        { name: "auth", description: "Authentication and API keys" },
+        { name: "auth", description: "Accounts, sessions, and API keys" },
+        { name: "org", description: "Organization member management" },
         { name: "tests", description: "Test authoring and management" },
         { name: "questions", description: "Question authoring (MCQ)" },
         { name: "invites", description: "Invite-only access management" },
@@ -51,7 +52,8 @@ export function buildApp(): FastifyInstance {
           bearerAuth: {
             type: "http",
             scheme: "bearer",
-            description: "API key as `Authorization: Bearer <key>`",
+            description:
+              "`Authorization: Bearer <token>` — either an API key (`proct_…`) or a user session token (`sess_…`).",
           },
         },
       },

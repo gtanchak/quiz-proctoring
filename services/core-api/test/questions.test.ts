@@ -1,25 +1,15 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { db, pool } from "../src/db/client.js";
-import { apiKeys } from "../src/db/schema/api-keys.js";
-import { attempts, questions, tests } from "../src/db/schema/tests.js";
-import { generateApiKey } from "../src/lib/api-key.js";
-
-async function seedKey(name: string): Promise<{ token: string; id: string }> {
-  const key = generateApiKey();
-  const [row] = await db
-    .insert(apiKeys)
-    .values({ name, keyPrefix: key.prefix, keyHash: key.hash })
-    .returning({ id: apiKeys.id });
-  return { token: key.token, id: row.id };
-}
+import { attempts, questions } from "../src/db/schema/tests.js";
+import { type SeededKey, cleanupOrgs, seedOrgWithKey } from "./helpers/seed.js";
 
 describe("MCQ question authoring (/v1/tests/:testId/questions)", () => {
   let app: FastifyInstance;
-  let ownerA: { token: string; id: string };
-  let ownerB: { token: string; id: string };
+  let ownerA: SeededKey;
+  let ownerB: SeededKey;
   let testId: string;
 
   const auth = (t: string) => ({ authorization: `Bearer ${t}` });
@@ -38,8 +28,8 @@ describe("MCQ question authoring (/v1/tests/:testId/questions)", () => {
   beforeAll(async () => {
     app = buildApp();
     await app.ready();
-    ownerA = await seedKey("q-owner-a");
-    ownerB = await seedKey("q-owner-b");
+    ownerA = await seedOrgWithKey("q-owner-a");
+    ownerB = await seedOrgWithKey("q-owner-b");
     const created = await app.inject({
       method: "POST",
       url: "/v1/tests",
@@ -50,8 +40,7 @@ describe("MCQ question authoring (/v1/tests/:testId/questions)", () => {
   });
 
   afterAll(async () => {
-    await db.delete(tests).where(inArray(tests.ownerKeyId, [ownerA.id, ownerB.id]));
-    await db.delete(apiKeys).where(inArray(apiKeys.id, [ownerA.id, ownerB.id]));
+    await cleanupOrgs([ownerA.orgId, ownerB.orgId]);
     await app.close();
     await pool.end();
   });

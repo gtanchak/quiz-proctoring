@@ -4,18 +4,18 @@ import { attempts, tests, type TestRow } from "../db/schema/tests.js";
 import { AppError } from "./errors.js";
 
 /**
- * Loads a test owned by the given API key, or throws 404. Shared by the tests
- * and questions routes so tenant scoping is enforced one way everywhere
- * (missing vs unowned both surface as 404 — never leak existence).
+ * Loads a test owned by the given organization, or throws 404. Shared by the
+ * tests and questions routes so tenant scoping is enforced one way everywhere
+ * (missing vs another org's both surface as 404 — never leak existence).
  */
-export async function findOwnedTest(
+export async function findOrgTest(
   id: string,
-  ownerKeyId: string,
+  orgId: string,
 ): Promise<TestRow> {
   const [row] = await db
     .select()
     .from(tests)
-    .where(and(eq(tests.id, id), eq(tests.ownerKeyId, ownerKeyId)))
+    .where(and(eq(tests.id, id), eq(tests.orgId, orgId)))
     .limit(1);
   if (!row) {
     throw AppError.notFound("Test not found");

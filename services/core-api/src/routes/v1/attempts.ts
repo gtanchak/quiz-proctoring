@@ -8,10 +8,11 @@ import {
   responses,
   tests,
 } from "../../db/schema/tests.js";
+import { requireWrite } from "../../lib/authz.js";
 import { AppError } from "../../lib/errors.js";
 import { gradeAttempt } from "../../lib/grade-attempt.js";
 import { PaginationQuery, paginated } from "../../lib/pagination.js";
-import { findOwnedTest } from "../../lib/test-access.js";
+import { findOrgTest } from "../../lib/test-access.js";
 import { computeDeadline, timerState } from "../../lib/timer.js";
 
 export const AttemptEntity = Type.Object(
@@ -81,6 +82,7 @@ export const attemptsRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.post(
     "/tests/:testId/attempts",
     {
+      preHandler: requireWrite,
       schema: {
         tags: ["attempts"],
         summary: "Start an attempt (records the server-authoritative start time)",
@@ -91,13 +93,14 @@ export const attemptsRoutes: FastifyPluginAsyncTypebox = async (app) => {
         }),
         response: {
           201: AttemptEntity,
+          403: Type.Ref("ErrorResponse"),
           404: Type.Ref("ErrorResponse"),
           409: Type.Ref("ErrorResponse"),
         },
       },
     },
     async (request, reply) => {
-      const test = await findOwnedTest(request.params.testId, request.apiKey!.id);
+      const test = await findOrgTest(request.params.testId, request.auth!.orgId);
       if (test.status !== "published") {
         throw AppError.conflict("Test must be published to start an attempt");
       }
@@ -133,7 +136,7 @@ export const attemptsRoutes: FastifyPluginAsyncTypebox = async (app) => {
       },
     },
     async (request) => {
-      await findOwnedTest(request.params.testId, request.apiKey!.id);
+      await findOrgTest(request.params.testId, request.auth!.orgId);
       const { limit, offset } = request.query;
       const where = eq(attempts.testId, request.params.testId);
 
@@ -167,7 +170,7 @@ export const attemptsRoutes: FastifyPluginAsyncTypebox = async (app) => {
       },
     },
     async (request) => {
-      const row = await findOwnedAttempt(request.params.id, request.apiKey!.id);
+      const row = await findOrgAttempt(request.params.id, request.auth!.orgId);
       return serializeAttempt(await autoExpireIfDue(row));
     },
   );
@@ -175,6 +178,7 @@ export const attemptsRoutes: FastifyPluginAsyncTypebox = async (app) => {
   app.post(
     "/attempts/:id/submit",
     {
+      preHandler: requireWrite,
       schema: {
         tags: ["attempts"],
         summary: "Submit and lock an attempt",
@@ -182,13 +186,14 @@ export const attemptsRoutes: FastifyPluginAsyncTypebox = async (app) => {
         params: IdParams,
         response: {
           200: AttemptEntity,
+          403: Type.Ref("ErrorResponse"),
           404: Type.Ref("ErrorResponse"),
           409: Type.Ref("ErrorResponse"),
         },
       },
     },
     async (request) => {
-      const row = await findOwnedAttempt(request.params.id, request.apiKey!.id);
+      const row = await findOrgAttempt(request.params.id, request.auth!.orgId);
       return serializeAttempt(await finalizeAttempt(row));
     },
   );
@@ -208,9 +213,9 @@ export const attemptsRoutes: FastifyPluginAsyncTypebox = async (app) => {
       },
     },
     async (request) => {
-      const attempt = await findOwnedAttempt(
+      const attempt = await findOrgAttempt(
         request.params.id,
-        request.apiKey!.id,
+        request.auth!.orgId,
       );
       const rows = await db
         .select()
@@ -251,16 +256,16 @@ export async function finalizeAttempt(row: AttemptRow): Promise<AttemptRow> {
   return gradeAttempt(updated);
 }
 
-/** Loads an attempt whose test is owned by the given key, or throws 404. */
-async function findOwnedAttempt(
+/** Loads an attempt whose test belongs to the given org, or throws 404. */
+async function findOrgAttempt(
   id: string,
-  ownerKeyId: string,
+  orgId: string,
 ): Promise<AttemptRow> {
   const [row] = await db
     .select({ attempt: attempts })
     .from(attempts)
     .innerJoin(tests, eq(attempts.testId, tests.id))
-    .where(and(eq(attempts.id, id), eq(tests.ownerKeyId, ownerKeyId)))
+    .where(and(eq(attempts.id, id), eq(tests.orgId, orgId)))
     .limit(1);
   if (!row) {
     throw AppError.notFound("Attempt not found");

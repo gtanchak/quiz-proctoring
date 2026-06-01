@@ -1,42 +1,26 @@
-import { inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { db, pool } from "../src/db/client.js";
-import { apiKeys } from "../src/db/schema/api-keys.js";
-import { attempts, tests } from "../src/db/schema/tests.js";
-import { generateApiKey } from "../src/lib/api-key.js";
-
-/** Seeds an API key and returns its raw token + id. */
-async function seedKey(name: string): Promise<{ token: string; id: string }> {
-  const key = generateApiKey();
-  const [row] = await db
-    .insert(apiKeys)
-    .values({ name, keyPrefix: key.prefix, keyHash: key.hash })
-    .returning({ id: apiKeys.id });
-  return { token: key.token, id: row.id };
-}
+import { attempts } from "../src/db/schema/tests.js";
+import { type SeededKey, cleanupOrgs, seedOrgWithKey } from "./helpers/seed.js";
 
 describe("tests resource (/v1/tests)", () => {
   let app: FastifyInstance;
-  let ownerA: { token: string; id: string };
-  let ownerB: { token: string; id: string };
+  let ownerA: SeededKey;
+  let ownerB: SeededKey;
 
   const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
   beforeAll(async () => {
     app = buildApp();
     await app.ready();
-    ownerA = await seedKey("owner-a");
-    ownerB = await seedKey("owner-b");
+    ownerA = await seedOrgWithKey("owner-a");
+    ownerB = await seedOrgWithKey("owner-b");
   });
 
   afterAll(async () => {
-    // attempts cascade from tests; remove tests then the keys.
-    await db
-      .delete(tests)
-      .where(inArray(tests.ownerKeyId, [ownerA.id, ownerB.id]));
-    await db.delete(apiKeys).where(inArray(apiKeys.id, [ownerA.id, ownerB.id]));
+    await cleanupOrgs([ownerA.orgId, ownerB.orgId]);
     await app.close();
     await pool.end();
   });

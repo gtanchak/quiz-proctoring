@@ -1,15 +1,12 @@
-import { inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
-import { db, pool } from "../src/db/client.js";
-import { apiKeys } from "../src/db/schema/api-keys.js";
-import { tests } from "../src/db/schema/tests.js";
-import { generateApiKey } from "../src/lib/api-key.js";
+import { pool } from "../src/db/client.js";
+import { type SeededKey, cleanupOrgs, seedOrgWithKey } from "./helpers/seed.js";
 
 describe("candidate access via share links (/v1/public)", () => {
   let app: FastifyInstance;
-  let owner: { token: string; id: string };
+  let owner: SeededKey;
 
   const admin = () => ({ authorization: `Bearer ${owner.token}` });
   const session = (t: string) => ({ authorization: `Bearer ${t}` });
@@ -55,17 +52,11 @@ describe("candidate access via share links (/v1/public)", () => {
   beforeAll(async () => {
     app = buildApp();
     await app.ready();
-    const key = generateApiKey();
-    const [row] = await db
-      .insert(apiKeys)
-      .values({ name: "access-owner", keyPrefix: key.prefix, keyHash: key.hash })
-      .returning({ id: apiKeys.id });
-    owner = { token: key.token, id: row.id };
+    owner = await seedOrgWithKey("access-owner");
   });
 
   afterAll(async () => {
-    await db.delete(tests).where(inArray(tests.ownerKeyId, [owner.id]));
-    await db.delete(apiKeys).where(inArray(apiKeys.id, [owner.id]));
+    await cleanupOrgs([owner.orgId]);
     await app.close();
     await pool.end();
   });

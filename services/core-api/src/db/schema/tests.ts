@@ -16,9 +16,10 @@ import {
  *
  * Co-located in one module because the tables have database-level foreign keys
  * to each other, and drizzle-kit cannot follow cross-file `.js` import
- * specifiers when generating migrations. `owner_key_id` (the tenant scope) is a
- * plain uuid rather than an FK to api_keys for the same reason — ownership is
- * enforced in the application layer.
+ * specifiers when generating migrations. `org_id` (the tenant scope, PRO-39) is
+ * a plain uuid rather than an FK to organizations for the same reason — its FK
+ * constraint is added by hand in the migration SQL and ownership is enforced in
+ * the application layer.
  */
 
 export const testStatus = pgEnum("test_status", [
@@ -32,7 +33,8 @@ export const accessMode = pgEnum("access_mode", ["open", "invite"]);
 
 export const tests = pgTable("tests", {
   id: uuid("id").primaryKey().defaultRandom(),
-  ownerKeyId: uuid("owner_key_id").notNull(),
+  // Tenant scope (PRO-39): the owning organization. Plain uuid; FK in migration.
+  orgId: uuid("org_id").notNull(),
   title: text("title").notNull(),
   description: text("description"),
   instructions: text("instructions"),

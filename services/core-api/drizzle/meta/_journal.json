@@ -57,6 +57,20 @@
       "when": 1779945838363,
       "tag": "0007_clear_vengeance",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780322074850,
+      "tag": "0008_cool_mattie_franklin",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1780322133056,
+      "tag": "0009_broken_madame_web",
+      "breakpoints": true
     }
   ]
 }

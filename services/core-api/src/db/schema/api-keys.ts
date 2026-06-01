@@ -5,11 +5,13 @@ import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
  * SHA-256 hash and an indexed lookup prefix. Revocation is a soft delete
  * (`revoked_at`) so we keep an audit trail.
  *
- * Full account-based key management (issuing/listing/revoking through the admin
- * UI) belongs to the accounts system (PRO-39); this table is the storage layer.
+ * Each key belongs to an organization (PRO-39); a key authenticates as a full-
+ * access actor within its org. `org_id` is a plain uuid (FK to organizations
+ * added in the migration SQL) for the same cross-file reason as tests.org_id.
  */
 export const apiKeys = pgTable("api_keys", {
   id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id").notNull(),
   name: text("name").notNull(),
   keyPrefix: text("key_prefix").notNull().unique(),
   keyHash: text("key_hash").notNull(),

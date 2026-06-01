@@ -45,6 +45,15 @@ pnpm build --filter @proctoring/shared
 pnpm --filter @proctoring/candidate-web dev
 ```
 
+## Continuous integration
+
+Every pull request (and push to `develop`/`main`) runs
+[`.github/workflows/ci.yml`](./.github/workflows/ci.yml): lint + typecheck +
+build + test (against a Postgres service), `terraform fmt`/`validate` over
+`infra/`, and a `docker build` of each service image. See
+[`docs/runbooks/ci-cd.md`](./docs/runbooks/ci-cd.md) for the pipeline, the
+required-status-checks setup, and the deferred deploy design.
+
 ## Repository layout
 
 ```
@@ -58,7 +67,7 @@ apps/
 services/
   core-api/        Tests, attempts, users, public REST API (Fastify)
   violation-ingest/ High-throughput violation event intake (Fastify)
-infra/             Infrastructure-as-code (Terraform) — populated in a later phase
+infra/             Infrastructure-as-code (Terraform) — dev/staging/production (PRO-52)
 docs/              Architecture, API reference, runbooks
 ```
 

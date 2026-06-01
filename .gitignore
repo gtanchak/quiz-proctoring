@@ -27,3 +27,16 @@ pnpm-debug.log*
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Terraform — never commit local state, provider plugins, plans, or crash logs.
+# Lockfiles and committed .tfvars (no secrets) ARE tracked.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

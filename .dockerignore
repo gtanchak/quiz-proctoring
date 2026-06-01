@@ -1,0 +1,22 @@
+# Keep the build context lean and free of secrets/artifacts.
+**/node_modules
+**/dist
+**/.turbo
+.turbo
+.git
+.github
+**/*.log
+
+# Never copy env files or local secrets into an image layer.
+**/.env
+**/.env.*
+
+# Terraform state / plugins (never belong in an image).
+infra/**/.terraform
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+
+# Editor / OS noise
+**/.DS_Store
+.idea
+.vscode

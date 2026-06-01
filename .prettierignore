@@ -1,0 +1,9 @@
+# Build output & dependencies
+**/dist
+**/node_modules
+**/.turbo
+
+# Generated / vendored — not hand-edited, don't reformat
+pnpm-lock.yaml
+**/drizzle/meta
+**/coverage

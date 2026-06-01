@@ -2,7 +2,7 @@
 
 The embeddable, **framework-agnostic** proctoring SDK. It runs inside any host
 page and **must not depend on React** (see `CLAUDE.md` §5). Detection runs
-client-side; only discrete violation events (and, later, periodic snapshots) are
+client-side; only discrete violation events and periodic snapshots are
 uploaded — never a continuous webcam stream.
 
 Violation events are built and validated against the shared contract
@@ -85,6 +85,52 @@ startButton.addEventListener("click", () => fs.enter()); // MUST be a user gestu
   click. Exit (Esc / F11 / OS gestures) cannot be blocked by the page; the
   enforcement is detect + prompt, not prevention. Exit count thresholds /
   auto-submit are **PRO-19**.
+
+## Snapshot capture (PRO-15)
+
+`SnapshotCapture` periodically grabs **still images** from the webcam and/or
+screen streams established at pre-flight (PRO-14), compresses them, and uploads
+them through a buffered, retrying queue. Per `CLAUDE.md`, these are discrete
+stills — **never** a continuous webcam video stream.
+
+```ts
+const capture = new SnapshotCapture({
+  attemptId,
+  // Resolve the live stream per kind (camera → "webcam").
+  getStream: (kind) =>
+    kind === "webcam"
+      ? preflight.getStreams().camera
+      : preflight.getStreams().screen,
+  // Transport is the host's job (signed-URL PUT / multipart POST; PRO-27/PRO-38).
+  // Throw to mark a transient failure — the snapshot stays buffered and retries.
+  upload: async ({ metadata, blob }) => {
+    await uploadEvidence(metadata, blob);
+  },
+  config, // SnapshotCaptureConfig from the test's admin settings (@proctoring/shared)
+});
+capture.start();
+// ... when the attempt ends:
+capture.stop();
+```
+
+- **Randomized intervals.** Captures fire at delays drawn uniformly from
+  `[avg*(1-jitter), avg*(1+jitter)]` around `averageIntervalMs` — fixed
+  intervals are easy for a candidate to game, so randomization is deliberate.
+- **Admin config** (`SnapshotCaptureConfig`, defined in `@proctoring/shared`):
+  `enabled`, `webcam`, `screen` (webcam-only vs. webcam+screen),
+  `averageIntervalMs`, `jitterRatio`, `maxDimension`, `imageQuality`, `format`.
+- **Each image is tagged** with a validated `SnapshotMetadata` (client-generated
+  id, attempt id, kind, accurate `capturedAt`, content type, size, dimensions) —
+  the same shared schema the storage service validates on receipt.
+- **Network loss does not lose images.** `SnapshotUploadQueue` buffers snapshots
+  and retries with exponential backoff, flushing immediately on the browser's
+  `online` event. The buffer is bounded (drops oldest under sustained
+  back-pressure, reported via `onQueueDrop`) so capture never degrades the test.
+- **Storage is out of scope here.** The SDK exposes the `upload` **port**; the
+  signed-URL/S3 transport and the evidence viewer are Evidence/Infrastructure
+  (PRO-27 / PRO-38). The frame grabber is injectable (`grabFrame`) — the default
+  uses `<video>`→canvas (cross-browser; `ImageCapture` is still missing in
+  Safari/Firefox) with `OffscreenCanvas` when available.
 
 ## Scripts
 

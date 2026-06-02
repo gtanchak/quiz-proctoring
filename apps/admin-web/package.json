@@ -10,17 +10,27 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
     "@proctoring/shared": "workspace:*",
+    "@proctoring/ui-components": "workspace:*",
+    "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^6.0.7"
+    "jsdom": "^25.0.1",
+    "tailwindcss": "^4.0.0",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
   }
 }

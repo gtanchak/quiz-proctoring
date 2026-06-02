@@ -13,6 +13,8 @@ export const ErrorCode = {
   CONFLICT: "CONFLICT",
   RATE_LIMITED: "RATE_LIMITED",
   INTERNAL: "INTERNAL",
+  /** An upstream service core-api depends on (e.g. violation-ingest) failed. */
+  BAD_GATEWAY: "BAD_GATEWAY",
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -64,5 +66,9 @@ export class AppError extends Error {
 
   static conflict(message: string, details?: unknown): AppError {
     return new AppError(409, ErrorCode.CONFLICT, message, details);
+  }
+
+  static badGateway(message: string, details?: unknown): AppError {
+    return new AppError(502, ErrorCode.BAD_GATEWAY, message, details);
   }
 }

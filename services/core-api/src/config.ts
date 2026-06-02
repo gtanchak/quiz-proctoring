@@ -45,6 +45,20 @@ const ConfigSchema = Type.Object({
   SCRYPT_N: Type.Number({ default: 16384 }),
   SCRYPT_R: Type.Number({ default: 8 }),
   SCRYPT_P: Type.Number({ default: 1 }),
+
+  // --- Reporting (PRO-26) ---------------------------------------------------
+  /**
+   * Base URL of the isolated violation-ingest service. core-api reads the
+   * violation timeline from it over HTTP when assembling a report — the two
+   * services do not share a table (CLAUDE.md §5).
+   */
+  VIOLATION_INGEST_URL: Type.String({ default: "http://localhost:3002" }),
+  /**
+   * Service API key core-api presents to violation-ingest's read API. A
+   * machine credential from the secrets store — never committed. Empty in
+   * dev/test (the report route injects a stub client in tests).
+   */
+  VIOLATION_INGEST_API_KEY: Type.String({ default: "" }),
 });
 
 export type Config = Static<typeof ConfigSchema>;

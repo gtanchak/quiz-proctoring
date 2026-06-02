@@ -45,6 +45,7 @@ export function buildApp(): FastifyInstance {
         { name: "questions", description: "Question authoring (MCQ)" },
         { name: "invites", description: "Invite-only access management" },
         { name: "attempts", description: "Candidate attempts & timer" },
+        { name: "reports", description: "Per-attempt reports & violation timeline" },
         { name: "public", description: "Candidate-facing endpoints (share link)" },
       ],
       components: {

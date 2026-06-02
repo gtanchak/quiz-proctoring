@@ -1,0 +1,7 @@
+/*
+ * App stylesheet: pulls in the shared design system (Tailwind v4 + shadcn
+ * tokens) and tells Tailwind to also scan the ui-components source so the
+ * utility classes used by those shared components are generated.
+ */
+@import "@proctoring/ui-components/globals.css";
+@source "../../../packages/ui-components/src/**/*.{ts,tsx}";

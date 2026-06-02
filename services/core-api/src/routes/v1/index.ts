@@ -6,6 +6,7 @@ import { meRoutes } from "./me.js";
 import { orgRoutes } from "./org.js";
 import { publicRoutes } from "./public.js";
 import { questionsRoutes } from "./questions.js";
+import { reportsRoutes } from "./reports.js";
 import { testsRoutes } from "./tests.js";
 
 /**
@@ -23,5 +24,6 @@ export const v1Routes: FastifyPluginAsyncTypebox = async (app) => {
   app.register(questionsRoutes);
   app.register(invitesRoutes);
   app.register(attemptsRoutes);
+  app.register(reportsRoutes);
   app.register(publicRoutes);
 };

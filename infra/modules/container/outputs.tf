@@ -18,6 +18,11 @@ output "task_role_arn" {
   value       = aws_iam_role.task.arn
 }
 
+output "task_role_name" {
+  description = "Name of the application task role (for attaching service policies)."
+  value       = aws_iam_role.task.name
+}
+
 output "log_group_name" {
   description = "CloudWatch log group for ECS task logs."
   value       = aws_cloudwatch_log_group.ecs.name

@@ -14,7 +14,10 @@ infra/
 │   ├── network/      # VPC, public/private subnets, IGW, NAT, security groups
 │   ├── database/     # RDS PostgreSQL (encrypted; AWS-managed master secret)
 │   ├── cache/        # ElastiCache Redis (encryption at rest + in transit)
-│   ├── storage/      # private, encrypted S3 evidence bucket
+│   ├── storage/      # private, encrypted S3 evidence bucket (+ lifecycle, CORS)
+│   ├── cdn/          # static-assets S3 bucket + CloudFront (OAC) for the SPA
+│   ├── queue/        # SQS async job queue + dead-letter queue
+│   ├── monitoring/   # SNS alert topic + CloudWatch alarms (RDS/Redis/CDN)
 │   ├── container/    # ECS Fargate cluster, task/exec IAM roles, log group
 │   └── platform/     # composition: wires the modules into one environment
 └── environments/
@@ -31,20 +34,28 @@ blast radius.
 
 ## What's here vs. what's next
 
-This issue (PRO-52) provisions the **baseline**: networking, database, cache,
-object storage, and the ECS cluster. Deliberately **out of scope** (added by
-later issues, layered on these same modules — do not duplicate):
+- **PRO-52** provisioned the **baseline**: networking, database, cache, the
+  evidence bucket, and the ECS cluster.
+- **PRO-38** (this issue) layered on the **storage/CDN/queue/monitoring** plane:
+  S3 lifecycle + retention + CORS, a CloudFront CDN for the SPA static assets,
+  an SQS job queue (with DLQ), CloudWatch alarms + an SNS alert topic, and the
+  task-role IAM that lets services read/write evidence and use the queue. See
+  the runbooks: `docs/runbooks/backups.md` and
+  `docs/runbooks/storage-cdn-monitoring.md`.
 
-- **PRO-38**: S3 lifecycle/retention rules, CloudFront CDN, SQS, CloudWatch
-  alarms/monitoring.
-- **PRO-51**: CI/CD that runs `terraform fmt -check` + `validate` and deploys
-  the ECS services / ALB (this stack provides only the cluster they land in).
+Still deliberately **out of scope** (do not duplicate):
+
+- **PRO-51 / deploy**: the CI/CD deploy of ECS **services / ALB** (this stack
+  provides the cluster, task roles, log group, and now the queue/bucket IAM they
+  land on). CI runs `terraform fmt -check` + `validate` only.
+- Evidence **signed-URL** minting and the in-report viewer are app-level
+  (core-api / PRO-27), not infrastructure.
 
 ## Stack (locked — Development Architecture §2–3, §9)
 
-AWS only: ECS Fargate, RDS PostgreSQL, S3, ElastiCache Redis, (CloudFront/SQS
-later). Region defaults to `us-east-1` but must be chosen deliberately for
-data-residency (PRO-44).
+AWS only: ECS Fargate, RDS PostgreSQL, S3, ElastiCache Redis, CloudFront, SQS.
+Region defaults to `us-east-1` but must be chosen deliberately for data-residency
+(PRO-44) — see `docs/runbooks/storage-cdn-monitoring.md`.
 
 ## Conventions
 

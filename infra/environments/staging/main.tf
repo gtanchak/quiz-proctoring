@@ -21,6 +21,7 @@ module "platform" {
   project              = var.project
   environment          = "staging"
   evidence_bucket_name = "${var.project}-staging-evidence-${data.aws_caller_identity.current.account_id}"
+  assets_bucket_name   = "${var.project}-staging-assets-${data.aws_caller_identity.current.account_id}"
 
   # Networking
   vpc_cidr          = "10.20.0.0/16"
@@ -41,7 +42,19 @@ module "platform" {
   redis_num_cache_clusters = 1
   redis_multi_az           = false
 
+  # Evidence — durable: keep indefinitely, prune old versions after 30 days.
+  # Set evidence_cors_allowed_origins to the real app origin once the domain is
+  # provisioned (browser signed-URL uploads need it).
+  evidence_bucket_force_destroy              = false
+  evidence_retention_days                    = 0
+  evidence_noncurrent_version_retention_days = 30
+  evidence_cors_allowed_origins              = []
+
+  # CDN / static assets
+  assets_bucket_force_destroy = false
+  cdn_price_class             = "PriceClass_100"
+
   # Misc
-  log_retention_days            = 30
-  evidence_bucket_force_destroy = false
+  log_retention_days = 30
+  alarm_email        = ""
 }

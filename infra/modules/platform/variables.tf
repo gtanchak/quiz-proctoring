@@ -107,3 +107,47 @@ variable "evidence_bucket_force_destroy" {
   type        = bool
   default     = false
 }
+
+# --- Evidence lifecycle / CORS (PRO-38) -------------------------------------
+variable "evidence_retention_days" {
+  description = "Expire current evidence objects after N days (0 = keep indefinitely)."
+  type        = number
+  default     = 0
+}
+
+variable "evidence_noncurrent_version_retention_days" {
+  description = "Days to keep noncurrent evidence versions."
+  type        = number
+  default     = 30
+}
+
+variable "evidence_cors_allowed_origins" {
+  description = "Origins allowed to upload evidence via signed URLs (empty = no CORS)."
+  type        = list(string)
+  default     = []
+}
+
+# --- CDN / static assets (PRO-38) -------------------------------------------
+variable "assets_bucket_name" {
+  description = "Globally-unique name for the static-assets (SPA) S3 bucket."
+  type        = string
+}
+
+variable "assets_bucket_force_destroy" {
+  description = "Allow deleting a non-empty assets bucket (dev only)."
+  type        = bool
+  default     = false
+}
+
+variable "cdn_price_class" {
+  description = "CloudFront price class for the static-assets distribution."
+  type        = string
+  default     = "PriceClass_100"
+}
+
+# --- Monitoring (PRO-38) ----------------------------------------------------
+variable "alarm_email" {
+  description = "Email subscribed to the alerts SNS topic (empty = no subscription)."
+  type        = string
+  default     = ""
+}

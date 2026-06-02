@@ -67,3 +67,33 @@ output "evidence_bucket" {
   description = "Evidence S3 bucket name."
   value       = module.storage.bucket_id
 }
+
+output "assets_bucket" {
+  description = "Static-assets (SPA) S3 bucket name."
+  value       = module.cdn.assets_bucket
+}
+
+output "cdn_domain_name" {
+  description = "CloudFront domain serving the static assets."
+  value       = module.cdn.distribution_domain_name
+}
+
+output "cdn_distribution_id" {
+  description = "CloudFront distribution id (for cache invalidations)."
+  value       = module.cdn.distribution_id
+}
+
+output "jobs_queue_url" {
+  description = "URL of the async jobs SQS queue."
+  value       = module.queue.queue_url
+}
+
+output "jobs_queue_arn" {
+  description = "ARN of the async jobs SQS queue."
+  value       = module.queue.queue_arn
+}
+
+output "alerts_topic_arn" {
+  description = "SNS topic that CloudWatch alarms publish to."
+  value       = module.monitoring.alerts_topic_arn
+}

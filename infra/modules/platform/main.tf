@@ -45,9 +45,12 @@ module "cache" {
 module "storage" {
   source = "../storage"
 
-  name_prefix   = local.name_prefix
-  bucket_name   = var.evidence_bucket_name
-  force_destroy = var.evidence_bucket_force_destroy
+  name_prefix                       = local.name_prefix
+  bucket_name                       = var.evidence_bucket_name
+  force_destroy                     = var.evidence_bucket_force_destroy
+  retention_days                    = var.evidence_retention_days
+  noncurrent_version_retention_days = var.evidence_noncurrent_version_retention_days
+  cors_allowed_origins              = var.evidence_cors_allowed_origins
 }
 
 module "container" {
@@ -55,4 +58,66 @@ module "container" {
 
   name_prefix        = local.name_prefix
   log_retention_days = var.log_retention_days
+}
+
+# CDN for the public SPA static assets (evidence is never served here).
+module "cdn" {
+  source = "../cdn"
+
+  name_prefix        = local.name_prefix
+  assets_bucket_name = var.assets_bucket_name
+  force_destroy      = var.assets_bucket_force_destroy
+  price_class        = var.cdn_price_class
+}
+
+# Async job queue (SQS) for out-of-band work (CV inference, evidence processing).
+module "queue" {
+  source = "../queue"
+
+  name_prefix = local.name_prefix
+}
+
+# Baseline alarms + alert topic for the database, cache, and CDN.
+module "monitoring" {
+  source = "../monitoring"
+
+  name_prefix                = local.name_prefix
+  alarm_email                = var.alarm_email
+  db_instance_id             = module.database.instance_id
+  redis_replication_group_id = module.cache.replication_group_id
+  cdn_distribution_id        = module.cdn.distribution_id
+}
+
+# Application task-role permissions: write/read evidence and use the job queue.
+# Attached here (the composition layer) because it spans storage + queue + the
+# task role created in the container module.
+data "aws_iam_policy_document" "task_access" {
+  statement {
+    sid       = "EvidenceBucketReadWrite"
+    actions   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+    resources = ["${module.storage.bucket_arn}/*"]
+  }
+
+  statement {
+    sid       = "EvidenceBucketList"
+    actions   = ["s3:ListBucket"]
+    resources = [module.storage.bucket_arn]
+  }
+
+  statement {
+    sid = "JobQueue"
+    actions = [
+      "sqs:SendMessage",
+      "sqs:ReceiveMessage",
+      "sqs:DeleteMessage",
+      "sqs:GetQueueAttributes",
+    ]
+    resources = [module.queue.queue_arn, module.queue.dlq_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "task_access" {
+  name   = "${local.name_prefix}-task-access"
+  role   = module.container.task_role_name
+  policy = data.aws_iam_policy_document.task_access.json
 }

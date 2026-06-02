@@ -38,3 +38,19 @@ output "redis_primary_endpoint" {
 output "evidence_bucket" {
   value = module.platform.evidence_bucket
 }
+
+output "assets_bucket" {
+  value = module.platform.assets_bucket
+}
+
+output "cdn_domain_name" {
+  value = module.platform.cdn_domain_name
+}
+
+output "jobs_queue_url" {
+  value = module.platform.jobs_queue_url
+}
+
+output "alerts_topic_arn" {
+  value = module.platform.alerts_topic_arn
+}

@@ -12,3 +12,8 @@ output "port" {
   description = "Redis port."
   value       = aws_elasticache_replication_group.this.port
 }
+
+output "replication_group_id" {
+  description = "Replication group id (the primary node is <id>-001)."
+  value       = aws_elasticache_replication_group.this.replication_group_id
+}

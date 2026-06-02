@@ -22,6 +22,7 @@ module "platform" {
   project              = var.project
   environment          = "production"
   evidence_bucket_name = "${var.project}-production-evidence-${data.aws_caller_identity.current.account_id}"
+  assets_bucket_name   = "${var.project}-production-assets-${data.aws_caller_identity.current.account_id}"
 
   # Networking — NAT per AZ for resilience.
   vpc_cidr          = "10.30.0.0/16"
@@ -42,7 +43,19 @@ module "platform" {
   redis_num_cache_clusters = 2
   redis_multi_az           = true
 
-  # Misc
-  log_retention_days            = 90
-  evidence_bucket_force_destroy = false
+  # Evidence — durable, kept for human review; prune old versions after 90 days.
+  # Set evidence_cors_allowed_origins to the real app origin once the domain is
+  # provisioned (browser signed-URL uploads need it).
+  evidence_bucket_force_destroy              = false
+  evidence_retention_days                    = 0
+  evidence_noncurrent_version_retention_days = 90
+  evidence_cors_allowed_origins              = []
+
+  # CDN / static assets — broad edge coverage for the candidate-facing app.
+  assets_bucket_force_destroy = false
+  cdn_price_class             = "PriceClass_All"
+
+  # Misc — wire alarm_email to the on-call address via tfvars/ops.
+  log_retention_days = 90
+  alarm_email        = ""
 }

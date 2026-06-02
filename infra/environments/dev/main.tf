@@ -23,6 +23,7 @@ module "platform" {
   project              = var.project
   environment          = "dev"
   evidence_bucket_name = "${var.project}-dev-evidence-${data.aws_caller_identity.current.account_id}"
+  assets_bucket_name   = "${var.project}-dev-assets-${data.aws_caller_identity.current.account_id}"
 
   # Networking
   vpc_cidr          = "10.10.0.0/16"
@@ -42,7 +43,18 @@ module "platform" {
   redis_num_cache_clusters = 1
   redis_multi_az           = false
 
+  # Evidence — throwaway env: short retention, freely destroyable, allow local
+  # app origins to upload via signed URLs.
+  evidence_bucket_force_destroy              = true
+  evidence_retention_days                    = 7
+  evidence_noncurrent_version_retention_days = 7
+  evidence_cors_allowed_origins              = ["http://localhost:5173", "http://localhost:5174"]
+
+  # CDN / static assets
+  assets_bucket_force_destroy = true
+  cdn_price_class             = "PriceClass_100"
+
   # Misc
-  log_retention_days            = 7
-  evidence_bucket_force_destroy = true
+  log_retention_days = 7
+  alarm_email        = ""
 }

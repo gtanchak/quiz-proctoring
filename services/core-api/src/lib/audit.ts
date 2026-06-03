@@ -15,6 +15,7 @@ export const AuditAction = {
   ORG_CREATED: "org.created",
   USER_CREATED: "user.created",
   USER_EMAIL_VERIFIED: "user.email_verified",
+  USER_EMAIL_VERIFICATION_REQUESTED: "user.email_verification_requested",
   USER_LOGIN: "user.login",
   USER_LOGOUT: "user.logout",
   USER_PASSWORD_RESET_REQUESTED: "user.password_reset_requested",

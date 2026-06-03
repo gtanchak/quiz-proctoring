@@ -2,6 +2,7 @@ import {
   ChangePasswordRequestSchema,
   LoginRequestSchema,
   LoginResponseSchema,
+  RequestEmailVerificationRequestSchema,
   RequestPasswordResetRequestSchema,
   ResetPasswordRequestSchema,
   SignupRequestSchema,
@@ -194,6 +195,49 @@ export const authRoutes: FastifyPluginAsyncTypebox = async (app) => {
         });
       }
       return { verified: true };
+    },
+  );
+
+  app.post(
+    "/auth/request-verification",
+    {
+      schema: {
+        tags: ["auth"],
+        summary: "Re-issue an email-verification link (always succeeds)",
+        body: RequestEmailVerificationRequestSchema,
+        response: { 202: Type.Object({ ok: Type.Boolean() }) },
+      },
+    },
+    async (request, reply) => {
+      const email = normalizeEmail(request.body.email);
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+
+      // Always 202 regardless — no enumeration. Only issue a token for an
+      // existing, non-deleted, still-unverified account (re-verifying is moot).
+      if (user && !user.deletedAt && !user.emailVerifiedAt) {
+        const { token, prefix, hash } = generateToken(
+          TOKEN_TAGS.emailVerification,
+        );
+        await db.insert(emailVerificationTokens).values({
+          userId: user.id,
+          tokenHash: hash,
+          tokenPrefix: prefix,
+          expiresAt: new Date(Date.now() + config.EMAIL_VERIFICATION_TTL * 1000),
+        });
+        await getEmailSender(request.log).send(buildVerifyEmail(email, token));
+        recordAudit(request.log, {
+          orgId: user.orgId,
+          actorType: "user",
+          actorUserId: user.id,
+          action: AuditAction.USER_EMAIL_VERIFICATION_REQUESTED,
+        });
+      }
+      reply.status(202);
+      return { ok: true };
     },
   );
 

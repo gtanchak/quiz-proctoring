@@ -7,7 +7,7 @@
  */
 
 /** Semantic version of the shared contract surface. */
-export const SHARED_CONTRACT_VERSION = "0.4.0" as const;
+export const SHARED_CONTRACT_VERSION = "0.5.0" as const;
 
 /** Marker confirming the shared package resolved at runtime (used by stubs). */
 export const sharedPackageName = "@proctoring/shared" as const;

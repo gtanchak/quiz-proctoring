@@ -153,6 +153,15 @@ export type RequestPasswordResetRequest = Static<
   typeof RequestPasswordResetRequestSchema
 >;
 
+/** Re-issue an email-verification link for an unverified account (PRO-55). */
+export const RequestEmailVerificationRequestSchema = Type.Object(
+  { email: EmailSchema },
+  { additionalProperties: false },
+);
+export type RequestEmailVerificationRequest = Static<
+  typeof RequestEmailVerificationRequestSchema
+>;
+
 export const ResetPasswordRequestSchema = Type.Object(
   { token: Type.String({ minLength: 1 }), password: PasswordSchema },
   { additionalProperties: false },

@@ -7,7 +7,7 @@ services, shared contracts, and infrastructure.
 > Read [`CLAUDE.md`](./CLAUDE.md) and the **Development Architecture** document
 > (Linear, Proctoring team) before contributing. The technology stack is locked.
 
-## Tooling
+## Toolings
 
 - **Package manager / workspaces:** [pnpm](https://pnpm.io) workspaces
 - **Build orchestration & caching:** [Turborepo](https://turbo.build)

@@ -8,3 +8,4 @@ reviewable decisions and their rationale as the system evolves.
 | ADR | Title | Status |
 | -- | -- | -- |
 | [0001](./0001-backend-service-boundaries.md) | Backend service boundaries (microservices) | Accepted; PRO-54 tracked for V1 |
+| [0002](./0002-assessment-engine-and-type-contract.md) | Assessment engine & assessment-type contract | Proposed (PRO-56) |

@@ -44,7 +44,7 @@ instruction to change this file.
 | Language (everything except CV) | TypeScript |
 | Web apps | React + TypeScript, built with Vite |
 | Proctoring SDK | TypeScript, framework-agnostic, **no React dependency** |
-| Backend services | Node.js + TypeScript, **Fastify** |
+| Backend services | Node.js + TypeScript — **Fastify** (existing MVP services) / **NestJS** (new platform/engine services, ADR 0002) |
 | CV/ML service | Python + FastAPI, wrapping **AWS Rekognition** |
 | Code execution sandbox | **Judge0**, self-hosted |
 | Database | PostgreSQL (AWS RDS) |
@@ -57,8 +57,16 @@ instruction to change this file.
 | PostgreSQL ORM / query layer | **Drizzle ORM** (migrations via drizzle-kit) |
 | Fastify schema / validation | **TypeBox** (`@sinclair/typebox`) |
 
-**Backend framework is Fastify, not NestJS** — do not generate NestJS
-decorators, modules, or DI. Use Fastify plugins and plain route handlers.
+**Backend framework — two frameworks, scoped (ADR 0002, `PRO-56`, Proposed):**
+The original MVP proctoring services (`core-api`, `violation-ingest`) are
+**Fastify** — do not rewrite them as a side effect; keep using Fastify plugins
+and plain route handlers there. The **new AI Interview & Assessment Platform
+engine and its services use NestJS** (modules + DI fit the engine-with-
+pluggable-assessment-types design). The two coexist; each service is still
+independently deployable (ADR 0001). Do not introduce NestJS into the existing
+Fastify services, and do not add Fastify to new engine services, without an
+explicit instruction. This reverses the earlier Fastify-only lock — recorded
+deliberately in ADR 0002, pending team review.
 
 **Monorepo tooling — decided (`PRO-46`):** pnpm workspaces for dependency and
 workspace management, with Turborepo for build/lint/test orchestration and
@@ -70,11 +78,15 @@ explicit and SQL-shaped (no hidden runtime magic — same rationale as the
 Fastify choice); schema-inferred types, migrations managed with `drizzle-kit`.
 Used by every TypeScript service that touches Postgres.
 
-**Fastify validation — decided (`PRO-33`):** TypeBox (`@sinclair/typebox`) via
-`@fastify/type-provider-typebox`. Route schemas are JSON Schema, so Fastify
-validates natively (Ajv) and the OpenAPI spec generates from the same source.
-The same definitions back the `shared` contract (`PRO-50`). Prefer one TypeBox
-schema as the single source for both runtime validation and static types.
+**Validation — decided (`PRO-33`), scope refined (ADR 0002):** In **Fastify**
+services, TypeBox (`@sinclair/typebox`) via `@fastify/type-provider-typebox` —
+route schemas are JSON Schema, so Fastify validates natively (Ajv) and the
+OpenAPI spec generates from the same source. In **NestJS** engine services, the
+native Fastify type-provider does not apply: keep cross-boundary validation
+**framework-agnostic in `@proctoring/shared`** and invoke it from a thin NestJS
+pipe — do **not** fork the contract into scattered `class-validator` decorators.
+Either way the `shared` package remains the single source for cross-boundary
+shapes and validation (`PRO-50`).
 
 **Still open** (decide when you reach the relevant issue, then record the
 choice here): the WebSocket gateway implementation. Do not pick this
@@ -228,7 +240,9 @@ Work is tracked in Linear as `PRO-N` issues, grouped into projects and phases
 ## 9. Things NOT to do
 
 - Do not swap any locked technology in section 2.
-- Do not generate NestJS-style code — this is a Fastify project.
+- Do not mix the backend frameworks across boundaries (ADR 0002): no NestJS in
+  the existing Fastify services (`core-api`, `violation-ingest`), and no Fastify
+  in the new NestJS engine services — without an explicit instruction.
 - Do not add a React dependency to `packages/proctoring-sdk`.
 - Do not redefine in one package a type that already lives in `shared`.
 - Do not trust the client clock for test timing.

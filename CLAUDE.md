@@ -44,7 +44,7 @@ instruction to change this file.
 | Language (everything except CV) | TypeScript |
 | Web apps | React + TypeScript, built with Vite |
 | Proctoring SDK | TypeScript, framework-agnostic, **no React dependency** |
-| Backend services | Node.js + TypeScript — **Fastify** (existing MVP services) / **NestJS** (new platform/engine services, ADR 0002) |
+| Backend services | Node.js + TypeScript, **NestJS** (ADR 0002; MVP services migrated off Fastify) |
 | CV/ML service | Python + FastAPI, wrapping **AWS Rekognition** |
 | Code execution sandbox | **Judge0**, self-hosted |
 | Database | PostgreSQL (AWS RDS) |
@@ -57,16 +57,16 @@ instruction to change this file.
 | PostgreSQL ORM / query layer | **Drizzle ORM** (migrations via drizzle-kit) |
 | Fastify schema / validation | **TypeBox** (`@sinclair/typebox`) |
 
-**Backend framework — two frameworks, scoped (ADR 0002, `PRO-56`, Proposed):**
-The original MVP proctoring services (`core-api`, `violation-ingest`) are
-**Fastify** — do not rewrite them as a side effect; keep using Fastify plugins
-and plain route handlers there. The **new AI Interview & Assessment Platform
-engine and its services use NestJS** (modules + DI fit the engine-with-
-pluggable-assessment-types design). The two coexist; each service is still
-independently deployable (ADR 0001). Do not introduce NestJS into the existing
-Fastify services, and do not add Fastify to new engine services, without an
-explicit instruction. This reverses the earlier Fastify-only lock — recorded
-deliberately in ADR 0002, pending team review.
+**Backend framework is NestJS (ADR 0002, `PRO-56`).** The whole platform uses
+**NestJS** — modules + DI, controllers delegating to injectable services,
+guards/interceptors for cross-cutting concerns, and a global exception filter
+for the consistent machine-readable error shape. This fits the engine-with-
+pluggable-assessment-types design. The original MVP services (`core-api`,
+`violation-ingest`) were built on Fastify and are **being migrated to NestJS**;
+during the migration a service may still be mid-port, but the target is
+NestJS everywhere and no new Fastify code is added. Each service stays
+independently deployable with its own schema ownership (ADR 0001). This
+reverses the earlier Fastify lock — recorded deliberately in ADR 0002.
 
 **Monorepo tooling — decided (`PRO-46`):** pnpm workspaces for dependency and
 workspace management, with Turborepo for build/lint/test orchestration and
@@ -220,9 +220,11 @@ Work is tracked in Linear as `PRO-N` issues, grouped into projects and phases
 
 - **TypeScript:** `strict` mode on. No implicit `any`. Prefer explicit types on
   exported/public APIs. Type cross-boundary data via the `shared` package.
-- **Fastify services:** plugins + plain route handlers. Validate request and
-  response payloads with schemas. Consistent, machine-readable error shapes.
-  Versioned API base path (`/v1/...`).
+- **NestJS services:** modules + DI; controllers stay thin and delegate to
+  injectable services; cross-cutting concerns are guards/interceptors; a global
+  exception filter produces the consistent, machine-readable error shape.
+  Validate request and response payloads via the `shared` validators (a thin
+  pipe), not forked decorators. Versioned API base path (`/v1/...`).
 - **React apps:** functional components and hooks. Shared UI goes in
   `packages/ui-components`.
 - **Python (cv-service only):** FastAPI, type hints throughout.
@@ -240,9 +242,8 @@ Work is tracked in Linear as `PRO-N` issues, grouped into projects and phases
 ## 9. Things NOT to do
 
 - Do not swap any locked technology in section 2.
-- Do not mix the backend frameworks across boundaries (ADR 0002): no NestJS in
-  the existing Fastify services (`core-api`, `violation-ingest`), and no Fastify
-  in the new NestJS engine services — without an explicit instruction.
+- Do not add new Fastify code — the platform is NestJS (ADR 0002). The MVP
+  services are being migrated off Fastify; don't reintroduce it.
 - Do not add a React dependency to `packages/proctoring-sdk`.
 - Do not redefine in one package a type that already lives in `shared`.
 - Do not trust the client clock for test timing.

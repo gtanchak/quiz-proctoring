@@ -100,30 +100,41 @@ This is the substantive change and it **reverses the CLAUDE.md §2 Fastify
 lock**. Recorded deliberately here (the correct mechanism per CLAUDE.md §10),
 not as a side effect.
 
-- **New platform services are built on NestJS** (Node + TypeScript). NestJS's
+- **NestJS is the single backend framework for the whole platform.** NestJS's
   module/DI structure fits an engine-with-pluggable-types design: assessment
   types register as injectable providers behind the `AssessmentType` contract;
   cross-cutting engine concerns (tenancy guard, RBAC, audit logging, model
   provider) are guards/interceptors/providers shared across modules.
-- **Existing MVP services stay Fastify for now.** `core-api` and
-  `violation-ingest` (ADR 0001) are not rewritten as part of this ADR. NestJS
-  and Fastify **coexist** during the migration; each service is independently
-  deployable (ADR 0001 still holds). A later issue may port `core-api` onto the
-  engine, but that is out of scope for PRO-56.
+- **The existing MVP services are migrated, not left on Fastify.**
+  `core-api` and `violation-ingest` are **ported to NestJS** so the codebase has
+  one backend idiom. The migration is incremental and behaviour-preserving:
+  each service keeps its public HTTP contract, ports, and DB ownership (ADR 0001
+  still holds — own-your-schema, contract-only sharing, independent deploy), and
+  its existing test suite must stay green throughout. `violation-ingest` is
+  ported first as the pilot (smaller surface), then `core-api`.
+  > **Revision note:** an earlier draft of this ADR scoped NestJS to *new*
+  > services only, with Fastify retained for the MVP services. That coexistence
+  > scope is **superseded** — the decision is now a full migration to NestJS.
+- **Mapping Fastify → NestJS:** plugins → modules/providers;
+  `preHandler`/decorators (auth, rate-limit) → guards + interceptors;
+  route handlers → controllers delegating to injectable services;
+  `setErrorHandler` → a global exception filter producing the same
+  machine-readable error shape; `app.inject` tests → Nest `Test` module +
+  `supertest` against the same routes.
 - **Validation / contract:** keep all cross-boundary validation **framework-
-  agnostic in `@proctoring/shared`** so it is callable from either framework.
-  NestJS validates via a thin pipe that calls the shared validators; we do **not**
-  scatter `class-validator` decorators that would fork the contract. (Note:
-  `@fastify/type-provider-typebox`'s *native* Fastify integration does not carry
-  over — the TypeBox/JSON-Schema definitions themselves still can, used
-  standalone. CLAUDE.md §2's TypeBox guidance is Fastify-specific and is
-  relaxed for NestJS services; see Consequences.)
+  agnostic in `@proctoring/shared`**. NestJS validates via a thin pipe that
+  calls the shared validators; we do **not** scatter `class-validator`
+  decorators that would fork the contract. The TypeBox/JSON-Schema definitions
+  remain in `shared` and are used standalone (the `@fastify/type-provider-typebox`
+  *native* integration is dropped with Fastify). The versioned `/v1` base path
+  and response/error schemas are preserved exactly.
 
-> ⚠️ **Cost, stated honestly.** This is not free. It introduces a second
-> backend framework, a different validation idiom, and new conventions the
-> team must learn. The payoff is a better structural fit for the engine and a
-> single idiom for all *new* platform work. The ADR confines the blast radius
-> by **not** rewriting existing services.
+> ⚠️ **Cost, stated honestly.** A full migration is a large, no-new-feature
+> change: every route, plugin, error path, and test in both services is
+> rewritten. The payoff is a single backend idiom across the platform (no
+> two-framework split to maintain) and an engine-ready DI structure. Risk is
+> contained by migrating one service at a time and gating each on its
+> pre-existing test suite passing unchanged in behaviour.
 
 ### 3b. Rest of the core stack
 
@@ -180,13 +191,14 @@ response tables hang off `CandidateSession` and are owned by the type.
   build against instead of stubs.
 - ✅ ADR 0001 (service boundaries, own-your-schema, contract-only sharing)
   continues to hold; new engine services follow it.
-- ⚠️ **CLAUDE.md must be updated** to reflect: NestJS as the framework for new
-  platform services (Fastify retained for existing `core-api`/`violation-ingest`),
-  TypeBox relaxed to "shared-package validators, framework-agnostic," and the
-  new project/phase context. Done alongside this ADR (PRO-56 acceptance:
-  "document the contract"; user instruction: update CLAUDE.md first).
-- ⚠️ Two backend frameworks coexist until/unless existing services are ported —
-  a deliberate, scoped cost (Decision 3).
+- ⚠️ **CLAUDE.md must be updated** to reflect: NestJS as the single backend
+  framework for the whole platform (existing `core-api`/`violation-ingest`
+  migrated off Fastify), TypeBox relaxed to "shared-package validators,
+  framework-agnostic," and the new project/phase context. Done alongside this
+  ADR (PRO-56 acceptance: "document the contract").
+- ⚠️ A full Fastify→NestJS migration of both MVP services is required before
+  further feature work — large, behaviour-preserving, one service at a time,
+  each gated on its existing tests staying green (Decision 3).
 - 📋 Follow-ups: PRO-57 (tenancy/auth) and PRO-59 (session lifecycle) are the
   first engine slices to implement against this ADR; PRO-60/61 next; then the
   AI Agent (PRO-65 → 66 → 67 → 68). Vector-store and real-time-transport

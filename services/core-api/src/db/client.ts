@@ -12,6 +12,7 @@ import {
 import { apiKeys } from "./schema/api-keys.js";
 import {
   attempts,
+  evidence,
   questions,
   responses,
   testInvites,
@@ -30,6 +31,7 @@ const schema = {
   attempts,
   testInvites,
   responses,
+  evidence,
   organizations,
   users,
   sessions,

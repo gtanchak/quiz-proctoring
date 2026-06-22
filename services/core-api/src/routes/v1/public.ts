@@ -1,11 +1,17 @@
 import { Type } from "@sinclair/typebox";
 import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
+import {
+  EvidenceUploadGrantSchema,
+  SnapshotMetadataSchema,
+} from "@proctoring/shared";
 import { and, count, eq, inArray } from "drizzle-orm";
 import type { FastifyRequest } from "fastify";
+import { config } from "../../config.js";
 import { db } from "../../db/client.js";
 import {
   attempts,
   type AttemptRow,
+  evidence,
   questions,
   responses,
   testInvites,
@@ -17,6 +23,7 @@ import {
   linkState,
 } from "../../lib/access.js";
 import { AppError } from "../../lib/errors.js";
+import { getEvidenceStore } from "../../lib/evidence-store.js";
 import { computeDeadline } from "../../lib/timer.js";
 import {
   AttemptEntity,
@@ -302,6 +309,80 @@ export const publicRoutes: FastifyPluginAsyncTypebox = async (app) => {
           });
       }
       return { saved: request.body.answers.length };
+    },
+  );
+
+  app.post(
+    "/public/attempt/snapshots",
+    {
+      schema: {
+        tags: ["public"],
+        summary: "Get a presigned URL to upload one proctoring snapshot (PRO-27)",
+        description:
+          "The candidate's SDK PUTs the image bytes straight to object storage " +
+          "with the returned grant — the bytes never stream through the API.",
+        security: [{ bearerAuth: [] }],
+        body: SnapshotMetadataSchema,
+        response: {
+          201: EvidenceUploadGrantSchema,
+          400: Type.Ref("ErrorResponse"),
+          401: Type.Ref("ErrorResponse"),
+          409: Type.Ref("ErrorResponse"),
+        },
+      },
+    },
+    async (request, reply) => {
+      const attempt = await autoExpireIfDue(
+        await resolveAttemptBySession(request),
+      );
+      // Snapshots are only accepted while the attempt is live; a finished
+      // attempt can no longer accumulate evidence.
+      if (attempt.status !== "in_progress") {
+        throw AppError.conflict("Attempt is not in progress");
+      }
+
+      const meta = request.body;
+      if (meta.byteSize > config.EVIDENCE_MAX_BYTES) {
+        throw AppError.badRequest("Snapshot exceeds the maximum allowed size");
+      }
+
+      const store = getEvidenceStore();
+      // Key is derived from the session attempt (not the client-supplied
+      // metadata.attemptId), so a candidate can only ever write under its own
+      // attempt's prefix.
+      const key = store.keyFor(attempt.id, meta.id);
+
+      // Record the evidence row before handing out the upload URL. The snapshot
+      // id is client-generated, so a retried grant is idempotent (no duplicate
+      // row); the bytes land at the same deterministic key either way.
+      await db
+        .insert(evidence)
+        .values({
+          id: meta.id,
+          attemptId: attempt.id,
+          kind: meta.kind,
+          contentType: meta.contentType,
+          byteSize: meta.byteSize,
+          width: meta.width,
+          height: meta.height,
+          capturedAt: new Date(meta.capturedAt),
+          storageKey: key,
+        })
+        .onConflictDoNothing({ target: evidence.id });
+
+      const grant = await store.presignUpload(key, meta.contentType);
+      const expiresAt = new Date(
+        Date.now() + config.EVIDENCE_UPLOAD_URL_TTL * 1000,
+      ).toISOString();
+      reply.status(201);
+      return {
+        snapshotId: meta.id,
+        key,
+        url: grant.url,
+        method: "PUT" as const,
+        headers: grant.headers,
+        expiresAt,
+      };
     },
   );
 

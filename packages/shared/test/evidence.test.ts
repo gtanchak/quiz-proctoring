@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SNAPSHOT_CONFIG,
   SNAPSHOT_SCHEMA_VERSION,
+  validateAttemptEvidence,
+  validateEvidenceUploadGrant,
   validateSnapshotCaptureConfig,
   validateSnapshotMetadata,
 } from "../src/index.js";
@@ -77,6 +79,59 @@ describe("validateSnapshotMetadata", () => {
   it("rejects a non-positive image dimension", () => {
     expect(
       validateSnapshotMetadata({ ...validMetadata, width: 0 }).valid,
+    ).toBe(false);
+  });
+});
+
+const validGrant = {
+  snapshotId: ID,
+  key: `evidence/${ATTEMPT}/snapshots/${ID}`,
+  url: "https://s3.example/evidence/...?sig=abc",
+  method: "PUT",
+  headers: { "Content-Type": "image/jpeg" },
+  expiresAt: "2026-06-01T12:05:00.000Z",
+};
+
+describe("validateEvidenceUploadGrant", () => {
+  it("accepts a well-formed grant", () => {
+    expect(validateEvidenceUploadGrant(validGrant).valid).toBe(true);
+  });
+
+  it("rejects a method other than PUT", () => {
+    expect(
+      validateEvidenceUploadGrant({ ...validGrant, method: "POST" }).valid,
+    ).toBe(false);
+  });
+});
+
+describe("validateAttemptEvidence", () => {
+  const validItem = {
+    id: ID,
+    attemptId: ATTEMPT,
+    kind: "webcam",
+    contentType: "image/jpeg",
+    byteSize: 24_576,
+    width: 1280,
+    height: 720,
+    capturedAt: "2026-06-01T12:00:00.000Z",
+    url: "https://s3.example/evidence/...?sig=abc",
+    expiresAt: "2026-06-01T12:05:00.000Z",
+  };
+
+  it("accepts a list of items (and null dimensions for non-image evidence)", () => {
+    const result = validateAttemptEvidence({
+      attemptId: ATTEMPT,
+      items: [validItem, { ...validItem, width: null, height: null }],
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it("rejects an item with a non-uuid id", () => {
+    expect(
+      validateAttemptEvidence({
+        attemptId: ATTEMPT,
+        items: [{ ...validItem, id: "nope" }],
+      }).valid,
     ).toBe(false);
   });
 });

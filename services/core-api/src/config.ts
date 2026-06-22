@@ -59,6 +59,30 @@ const ConfigSchema = Type.Object({
    * dev/test (the report route injects a stub client in tests).
    */
   VIOLATION_INGEST_API_KEY: Type.String({ default: "" }),
+
+  // --- Evidence storage (PRO-27) --------------------------------------------
+  /**
+   * Name of the private S3 bucket holding proctoring evidence (the Terraform
+   * `evidence` bucket). Empty in dev/test, where the route injects a stub store;
+   * required in production for the S3-backed store to function.
+   */
+  EVIDENCE_BUCKET: Type.String({ default: "" }),
+  /** AWS region of the evidence bucket. */
+  AWS_REGION: Type.String({ default: "us-east-1" }),
+  /**
+   * Optional S3 endpoint override (e.g. MinIO/LocalStack for local dev). Empty
+   * uses the real AWS endpoint. Credentials always come from the default AWS
+   * provider chain (the ECS task role) — never from config (CLAUDE.md §6).
+   */
+  S3_ENDPOINT: Type.String({ default: "" }),
+  /** Path-style addressing — needed by MinIO/LocalStack; off for real S3. */
+  S3_FORCE_PATH_STYLE: Type.Boolean({ default: false }),
+  /** Lifetime of a presigned upload URL, in seconds. Default 5 minutes. */
+  EVIDENCE_UPLOAD_URL_TTL: Type.Number({ default: 300 }),
+  /** Lifetime of a presigned retrieval URL, in seconds. Default 5 minutes. */
+  EVIDENCE_GET_URL_TTL: Type.Number({ default: 300 }),
+  /** Hard cap on a single snapshot's byte size (defends the upload grant). 10 MiB. */
+  EVIDENCE_MAX_BYTES: Type.Number({ default: 10 * 1024 * 1024 }),
 });
 
 export type Config = Static<typeof ConfigSchema>;

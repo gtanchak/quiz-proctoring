@@ -1,7 +1,11 @@
-import type { AttemptReport } from "@proctoring/shared";
+import type { AttemptReport, EvidenceItem } from "@proctoring/shared";
 
 const ATTEMPT = "22222222-2222-2222-2222-222222222222";
 const TEST = "33333333-3333-3333-3333-333333333333";
+
+/** Evidence id linked to the first violation in {@link sampleReport}. */
+export const LINKED_EVIDENCE_ID = "66666666-6666-6666-6666-666666666666";
+const AUDIO_EVIDENCE_ID = "77777777-7777-7777-7777-777777777777";
 
 /** A representative report: completed attempt, two violations. */
 export function sampleReport(over: Partial<AttemptReport> = {}): AttemptReport {
@@ -31,7 +35,7 @@ export function sampleReport(over: Partial<AttemptReport> = {}): AttemptReport {
         endedAt: "2026-06-01T12:01:04.000Z",
         durationMs: 4_000,
         offsetMs: 60_000,
-        evidenceIds: ["ev1"],
+        evidenceIds: [LINKED_EVIDENCE_ID],
         metadata: null,
       },
       {
@@ -50,4 +54,34 @@ export function sampleReport(over: Partial<AttemptReport> = {}): AttemptReport {
     generatedAt: "2026-06-01T12:31:00.000Z",
     ...over,
   };
+}
+
+/** Representative evidence: a webcam snapshot (linked to violation 1) + an audio clip. */
+export function sampleEvidence(): EvidenceItem[] {
+  return [
+    {
+      id: LINKED_EVIDENCE_ID,
+      attemptId: ATTEMPT,
+      kind: "webcam",
+      contentType: "image/jpeg",
+      byteSize: 24_000,
+      width: 640,
+      height: 480,
+      capturedAt: "2026-06-01T12:01:00.000Z",
+      url: "https://evidence.example/signed/webcam.jpg?sig=abc",
+      expiresAt: "2026-06-01T12:36:00.000Z",
+    },
+    {
+      id: AUDIO_EVIDENCE_ID,
+      attemptId: ATTEMPT,
+      kind: "webcam",
+      contentType: "audio/webm",
+      byteSize: 8_000,
+      width: null,
+      height: null,
+      capturedAt: "2026-06-01T12:05:00.000Z",
+      url: "https://evidence.example/signed/clip.webm?sig=def",
+      expiresAt: "2026-06-01T12:36:00.000Z",
+    },
+  ];
 }

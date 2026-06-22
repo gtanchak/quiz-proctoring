@@ -71,6 +71,13 @@
       "when": 1780322133056,
       "tag": "0009_broken_madame_web",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1780685234693,
+      "tag": "0010_smiling_iron_lad",
+      "breakpoints": true
     }
   ]
 }

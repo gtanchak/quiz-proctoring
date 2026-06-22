@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -191,8 +192,47 @@ export const responses = pgTable(
   (t) => [unique("responses_attempt_question_unique").on(t.attemptId, t.questionId)],
 );
 
+/** What a stored snapshot is of (PRO-15). Mirrors the shared `SnapshotKind`. */
+export const evidenceKind = pgEnum("evidence_kind", ["webcam", "screen"]);
+
+/**
+ * Proctoring evidence — the periodic snapshots (and, later, audio clips / ID
+ * images) captured during an attempt (PRO-27). The bytes live in object storage
+ * (S3); this row is the index core-api keeps to mint signed retrieval URLs and
+ * to support permanent deletion. Co-located here for its FK to attempts (and so
+ * deleting an attempt cascades its evidence rows; the S3 objects are erased by
+ * the delete-evidence route / data-retention flow).
+ *
+ * The PK is the *client-generated* snapshot id, so a retried upload grant for
+ * the same snapshot is idempotent rather than creating a duplicate row.
+ * `captured_at` is the client-observed time — advisory evidence, like violation
+ * timestamps, never the server-authoritative timer.
+ */
+export const evidence = pgTable(
+  "evidence",
+  {
+    id: uuid("id").primaryKey(),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    kind: evidenceKind("kind").notNull(),
+    contentType: text("content_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+    // Object-storage key the bytes are stored under (never exposed to clients).
+    storageKey: text("storage_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("evidence_attempt_idx").on(t.attemptId)],
+);
+
 export type TestRow = typeof tests.$inferSelect;
 export type QuestionRow = typeof questions.$inferSelect;
 export type AttemptRow = typeof attempts.$inferSelect;
 export type TestInviteRow = typeof testInvites.$inferSelect;
 export type ResponseRow = typeof responses.$inferSelect;
+export type EvidenceRow = typeof evidence.$inferSelect;

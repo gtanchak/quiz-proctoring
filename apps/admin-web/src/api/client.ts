@@ -1,4 +1,9 @@
-import { type AttemptReport, validateAttemptReport } from "@proctoring/shared";
+import {
+  type AttemptEvidence,
+  type AttemptReport,
+  validateAttemptEvidence,
+  validateAttemptReport,
+} from "@proctoring/shared";
 
 /**
  * Thin core-api client for admin-web. Kept deliberately small — a proper
@@ -54,6 +59,53 @@ export async function getAttemptReport(
     throw new ApiError(res.status, "The report response was malformed");
   }
   return result.value;
+}
+
+/** Fetches an attempt's evidence with signed URLs (PRO-27). Throws {@link ApiError}. */
+export async function getAttemptEvidence(
+  attemptId: string,
+  options: RequestOptions = {},
+): Promise<AttemptEvidence> {
+  const doFetch = options.fetchImpl ?? fetch;
+  const token = options.token ?? getSessionToken();
+
+  const res = await doFetch(
+    `${API_BASE}/v1/attempts/${attemptId}/evidence`,
+    token ? { headers: { authorization: `Bearer ${token}` } } : undefined,
+  );
+
+  if (!res.ok) {
+    throw new ApiError(res.status, await errorMessage(res));
+  }
+
+  const result = validateAttemptEvidence(await res.json());
+  if (!result.valid) {
+    throw new ApiError(res.status, "The evidence response was malformed");
+  }
+  return result.value;
+}
+
+/**
+ * Permanently deletes all of an attempt's evidence (PRO-27). Returns the number
+ * of items erased. Throws {@link ApiError} on failure.
+ */
+export async function deleteAttemptEvidence(
+  attemptId: string,
+  options: RequestOptions = {},
+): Promise<number> {
+  const doFetch = options.fetchImpl ?? fetch;
+  const token = options.token ?? getSessionToken();
+
+  const res = await doFetch(`${API_BASE}/v1/attempts/${attemptId}/evidence`, {
+    method: "DELETE",
+    ...(token ? { headers: { authorization: `Bearer ${token}` } } : {}),
+  });
+
+  if (!res.ok) {
+    throw new ApiError(res.status, await errorMessage(res));
+  }
+  const body = (await res.json()) as { deleted?: number };
+  return body.deleted ?? 0;
 }
 
 async function errorMessage(res: Response): Promise<string> {

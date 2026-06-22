@@ -111,3 +111,81 @@ export const SnapshotMetadataSchema = Type.Object(
 );
 
 export type SnapshotMetadata = Static<typeof SnapshotMetadataSchema>;
+
+/**
+ * Evidence storage & retrieval contract (PRO-27). The bytes are stored in
+ * object storage (S3) and only ever reached through signed, time-limited URLs
+ * (CLAUDE.md §5: evidence is private — never a public or guessable link). Three
+ * shapes cross the boundary, defined once here:
+ *
+ *  - {@link EvidenceUploadGrant} — what the candidate gets back when it asks to
+ *    store a snapshot: a presigned URL it PUTs the bytes straight to, so the
+ *    image never streams through the API.
+ *  - {@link EvidenceItem} — one stored snapshot as shown to an admin reviewer:
+ *    its metadata plus a short-lived signed URL to fetch the bytes.
+ *  - {@link AttemptEvidence} — all evidence for one attempt (the report viewer
+ *    correlates these to the violation timeline via `ReportViolation.evidenceIds`).
+ */
+
+/**
+ * A short-lived grant to upload exactly one snapshot's bytes directly to object
+ * storage. The client must PUT to `url` with every header in `headers` (the
+ * signature covers them), before `expiresAt`.
+ */
+export const EvidenceUploadGrantSchema = Type.Object(
+  {
+    /** The client snapshot id this grant was minted for (the idempotency anchor). */
+    snapshotId: Type.String({ format: "uuid" }),
+    /** Storage object key the bytes will live under; opaque to the client. */
+    key: Type.String(),
+    /** Presigned URL to upload the bytes to. */
+    url: Type.String(),
+    /** Always PUT for a presigned object upload. */
+    method: Type.Literal("PUT"),
+    /** Headers the client MUST send with the PUT for the signature to verify. */
+    headers: Type.Record(Type.String(), Type.String()),
+    /** ISO 8601 instant after which the grant URL stops working. */
+    expiresAt: Type.String({ format: "date-time" }),
+  },
+  { $id: "EvidenceUploadGrant", additionalProperties: false },
+);
+
+export type EvidenceUploadGrant = Static<typeof EvidenceUploadGrantSchema>;
+
+/**
+ * One stored piece of evidence as presented to an admin reviewer. `kind` and
+ * the (snapshot) metadata mirror {@link SnapshotMetadata}; `contentType` is a
+ * plain string so later evidence (audio clips, ID images) can reuse the shape.
+ * `width`/`height` are null for non-image evidence.
+ */
+export const EvidenceItemSchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid" }),
+    attemptId: Type.String({ format: "uuid" }),
+    kind: SnapshotKindSchema,
+    contentType: Type.String(),
+    byteSize: Type.Integer({ minimum: 0 }),
+    width: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
+    height: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
+    /** Client-observed capture time (ISO 8601) — advisory, like violation times. */
+    capturedAt: Type.String({ format: "date-time" }),
+    /** Signed, time-limited URL to fetch the bytes (never public/guessable). */
+    url: Type.String(),
+    /** ISO 8601 instant after which `url` stops working. */
+    expiresAt: Type.String({ format: "date-time" }),
+  },
+  { $id: "EvidenceItem", additionalProperties: false },
+);
+
+export type EvidenceItem = Static<typeof EvidenceItemSchema>;
+
+/** All evidence captured for one attempt, newest capture first. */
+export const AttemptEvidenceSchema = Type.Object(
+  {
+    attemptId: Type.String({ format: "uuid" }),
+    items: Type.Array(EvidenceItemSchema),
+  },
+  { $id: "AttemptEvidence", additionalProperties: false },
+);
+
+export type AttemptEvidence = Static<typeof AttemptEvidenceSchema>;

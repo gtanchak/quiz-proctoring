@@ -4,8 +4,12 @@ import { Value } from "@sinclair/typebox/value";
 // enforces them (TypeBox does not validate formats unless registered).
 import "../violation/formats.js";
 import {
+  AttemptEvidenceSchema,
+  EvidenceUploadGrantSchema,
   SnapshotCaptureConfigSchema,
   SnapshotMetadataSchema,
+  type AttemptEvidence,
+  type EvidenceUploadGrant,
   type SnapshotCaptureConfig,
   type SnapshotMetadata,
 } from "./types.js";
@@ -40,4 +44,18 @@ export function validateSnapshotMetadata(
   input: unknown,
 ): ValidationResult<SnapshotMetadata> {
   return validate<SnapshotMetadata>(SnapshotMetadataSchema, input);
+}
+
+/** Validates an upload grant (PRO-27) — used by the host wiring the SDK uploader. */
+export function validateEvidenceUploadGrant(
+  input: unknown,
+): ValidationResult<EvidenceUploadGrant> {
+  return validate<EvidenceUploadGrant>(EvidenceUploadGrantSchema, input);
+}
+
+/** Validates an attempt's evidence list (PRO-27) — used by the admin report viewer. */
+export function validateAttemptEvidence(
+  input: unknown,
+): ValidationResult<AttemptEvidence> {
+  return validate<AttemptEvidence>(AttemptEvidenceSchema, input);
 }

@@ -1,9 +1,13 @@
-import { buildApp } from "./app.js";
+import { createApp } from "./app.factory.js";
 import { config } from "./config.js";
 
-const app = buildApp();
+async function bootstrap(): Promise<void> {
+  const app = await createApp();
+  await app.listen(config.PORT, config.HOST);
+}
 
-app.listen({ port: config.PORT, host: config.HOST }).catch((err) => {
-  app.log.error(err);
+bootstrap().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error(err);
   process.exit(1);
 });

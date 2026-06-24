@@ -39,11 +39,11 @@ const UserIdParams = Type.Object({ userId: Type.String({ format: "uuid" }) });
 
 /**
  * Organization member management (PRO-39). Listing is open to any authenticated
- * org member; mutations are owner-only (`@Roles("owner")`). These routes sit
+ * org member; mutations are owner-only (`@Roles("tenant_admin")`). These routes sit
  * under `/v1/org/*` and are authenticated by the global guard.
  *
  * Invited members set their *own* password via an emailed link (we never
- * provision credentials on their behalf — PRO-39). The owner only grants the
+ * provision credentials on their behalf — PRO-39). The tenant admin only grants the
  * seat and role.
  */
 @Controller("v1/org")
@@ -59,7 +59,7 @@ export class OrgController {
   }
 
   @Post("users")
-  @Roles("owner")
+  @Roles("tenant_admin")
   @HttpCode(201)
   async createUser(@Auth() auth: RequestAuth, @Body() body: unknown) {
     const dto = validate(CreateMemberRequestSchema, body);
@@ -116,7 +116,7 @@ export class OrgController {
   }
 
   @Patch("users/:userId/role")
-  @Roles("owner")
+  @Roles("tenant_admin")
   async changeRole(
     @Auth() auth: RequestAuth,
     @Param() params: Record<string, string>,
@@ -125,8 +125,8 @@ export class OrgController {
     const { userId } = validate(UserIdParams, params);
     const dto = validate(ChangeRoleRequestSchema, body);
     const target = await findOrgUser(userId, auth.orgId);
-    if (target.role === "owner") {
-      throw AppError.badRequest("The owner's role cannot be changed");
+    if (target.role === "tenant_admin") {
+      throw AppError.badRequest("The tenant admin's role cannot be changed");
     }
     const [updated] = await db
       .update(users)
@@ -146,7 +146,7 @@ export class OrgController {
   }
 
   @Delete("users/:userId")
-  @Roles("owner")
+  @Roles("tenant_admin")
   @HttpCode(204)
   async removeUser(
     @Auth() auth: RequestAuth,
@@ -154,8 +154,8 @@ export class OrgController {
   ): Promise<void> {
     const { userId } = validate(UserIdParams, params);
     const target = await findOrgUser(userId, auth.orgId);
-    if (target.role === "owner") {
-      throw AppError.badRequest("The owner cannot be removed");
+    if (target.role === "tenant_admin") {
+      throw AppError.badRequest("The tenant admin cannot be removed");
     }
     // Soft delete and revoke their sessions so access ends immediately.
     await db

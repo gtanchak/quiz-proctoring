@@ -27,7 +27,13 @@ import {
  * drizzle-kit parses this file directly and cannot resolve the workspace
  * package. A test asserts the two stay in sync (see test/role-enum-sync.test.ts).
  */
-export const userRole = pgEnum("user_role", ["owner", "admin", "viewer"]);
+export const userRole = pgEnum("user_role", [
+  "platform_admin",
+  "tenant_admin",
+  "recruiter",
+  "reviewer",
+  "candidate",
+]);
 
 /** Who/what performed an audited action. */
 export const auditActorType = pgEnum("audit_actor_type", [

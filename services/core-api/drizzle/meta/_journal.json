@@ -1,83 +1,90 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1779864107147,
-      "tag": "0000_flat_shaman",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1779865434532,
-      "tag": "0001_common_starhawk",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1779880951209,
-      "tag": "0002_swift_lady_ursula",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1779880962747,
-      "tag": "0003_robust_makkari",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1779883099242,
-      "tag": "0004_cynical_pyro",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1779886711279,
-      "tag": "0005_tranquil_maverick",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1779893763138,
-      "tag": "0006_light_bug",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1779945838363,
-      "tag": "0007_clear_vengeance",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1780322074850,
-      "tag": "0008_cool_mattie_franklin",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1780322133056,
-      "tag": "0009_broken_madame_web",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1780685234693,
-      "tag": "0010_smiling_iron_lad",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "7",
+			"when": 1779864107147,
+			"tag": "0000_flat_shaman",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1779865434532,
+			"tag": "0001_common_starhawk",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1779880951209,
+			"tag": "0002_swift_lady_ursula",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1779880962747,
+			"tag": "0003_robust_makkari",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1779883099242,
+			"tag": "0004_cynical_pyro",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1779886711279,
+			"tag": "0005_tranquil_maverick",
+			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1779893763138,
+			"tag": "0006_light_bug",
+			"breakpoints": true
+		},
+		{
+			"idx": 7,
+			"version": "7",
+			"when": 1779945838363,
+			"tag": "0007_clear_vengeance",
+			"breakpoints": true
+		},
+		{
+			"idx": 8,
+			"version": "7",
+			"when": 1780322074850,
+			"tag": "0008_cool_mattie_franklin",
+			"breakpoints": true
+		},
+		{
+			"idx": 9,
+			"version": "7",
+			"when": 1780322133056,
+			"tag": "0009_broken_madame_web",
+			"breakpoints": true
+		},
+		{
+			"idx": 10,
+			"version": "7",
+			"when": 1780685234693,
+			"tag": "0010_smiling_iron_lad",
+			"breakpoints": true
+		},
+		{
+			"idx": 11,
+			"version": "7",
+			"when": 1780685234694,
+			"tag": "0011_multitenant_roles",
+			"breakpoints": true
+		}
+	]
 }

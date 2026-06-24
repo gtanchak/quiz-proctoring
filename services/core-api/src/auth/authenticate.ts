@@ -70,7 +70,9 @@ export async function authenticateToken(
     return {
       orgId: row.orgId,
       actorType: "apiKey",
-      role: "owner",
+      // A machine API key is a full-access tenant actor (the pre-accounts
+      // behaviour where a key could do everything for its tenant).
+      role: "tenant_admin",
       apiKeyId: row.id,
     };
   }

@@ -105,7 +105,7 @@ export class AuthController {
           orgId: org.id,
           email,
           name: dto.name,
-          role: "owner",
+          role: "tenant_admin",
           passwordHash: hashPassword(dto.password),
         })
         .returning();

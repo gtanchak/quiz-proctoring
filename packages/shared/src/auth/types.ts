@@ -18,20 +18,30 @@ import { Type, type Static } from "@sinclair/typebox";
  */
 
 /**
- * Account roles, most-privileged first:
- * - `owner`  — created the account; can manage members, roles, and the org.
- * - `admin`  — full read/write on tests, attempts, and reports.
- * - `viewer` — read-only (a reviewer who inspects results but cannot edit).
+ * Account roles, most-privileged first (PRO-57 multi-tenant taxonomy):
+ * - `platform_admin` — cross-tenant super-admin (provisions tenants). Not scoped
+ *   to a single tenant's data.
+ * - `tenant_admin`   — created/owns the tenant; manages members, roles, settings.
+ * - `recruiter`      — full read/write on tests, attempts, and reports.
+ * - `reviewer`       — read-only (inspects results but cannot edit).
+ * - `candidate`      — the assessment taker (reserved; candidates authenticate by
+ *   per-attempt session token today, not a user account).
  */
-export const ROLES = ["owner", "admin", "viewer"] as const;
+export const ROLES = [
+  "platform_admin",
+  "tenant_admin",
+  "recruiter",
+  "reviewer",
+  "candidate",
+] as const;
 export type Role = (typeof ROLES)[number];
 
 export const RoleSchema = Type.Union(ROLES.map((r) => Type.Literal(r)), {
   description: "Account role (see ROLES)",
 });
 
-/** Roles that may mutate tests/questions/invites/attempts. `viewer` may not. */
-export const WRITE_ROLES = ["owner", "admin"] as const;
+/** Roles that may mutate tests/questions/invites/attempts. `reviewer` may not. */
+export const WRITE_ROLES = ["tenant_admin", "recruiter"] as const;
 
 /** What kind of credential authenticated a request. */
 export const ACTOR_TYPES = ["user", "apiKey"] as const;
@@ -185,16 +195,16 @@ export type UpdateProfileRequest = Static<typeof UpdateProfileRequestSchema>;
 
 // --- Org member management (owner-only) -------------------------------------
 
-/** Assignable roles for members — `owner` is established at signup, not granted. */
+/** Assignable roles for members — `tenant_admin` is established at signup, not granted. */
 const AssignableRoleSchema = Type.Union([
-  Type.Literal("admin"),
-  Type.Literal("viewer"),
+  Type.Literal("recruiter"),
+  Type.Literal("reviewer"),
 ]);
 
 /**
- * Invite a teammate into the org. No password here — the invited member sets
+ * Invite a teammate into the tenant. No password here — the invited member sets
  * their own password via an emailed link (the user creates their own
- * credentials; the owner only grants the seat and role).
+ * credentials; the tenant admin only grants the seat and role).
  */
 export const CreateMemberRequestSchema = Type.Object(
   {

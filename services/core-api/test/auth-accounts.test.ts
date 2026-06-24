@@ -54,7 +54,7 @@ describe("auth & accounts (/v1/auth)", () => {
     orgIds.push(body.org.id);
     expect(body.user).toMatchObject({
       email: "aa-signup@example.com",
-      role: "owner",
+      role: "tenant_admin",
       emailVerifiedAt: null,
     });
     expect(body.user.passwordHash).toBeUndefined();
@@ -107,7 +107,7 @@ describe("auth & accounts (/v1/auth)", () => {
 
     const me = await app.inject({ method: "GET", url: "/v1/me", headers: bearer(session) });
     expect(me.statusCode).toBe(200);
-    expect(me.json()).toMatchObject({ actorType: "user", user: { email, role: "owner" } });
+    expect(me.json()).toMatchObject({ actorType: "user", user: { email, role: "tenant_admin" } });
 
     const logout = await app.inject({
       method: "POST",

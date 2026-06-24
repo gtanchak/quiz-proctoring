@@ -23,5 +23,11 @@ export interface RequestAuth {
 declare module "express" {
   interface Request {
     auth?: RequestAuth | null;
+    /**
+     * The resolved tenant id for the request (the org id), set by TenantGuard
+     * on authenticated `/v1` routes. The `organizations` table is the tenant
+     * boundary (ADR 0002: shared-schema + tenant_id).
+     */
+    tenantId?: string;
   }
 }

@@ -9,13 +9,17 @@ import {
   Post,
 } from "@nestjs/common";
 import {
+  CandidateErasureRequestSchema,
+  type CandidateErasureResponse,
   ChangeRoleRequestSchema,
   CreateMemberRequestSchema,
   type TenantBranding,
+  type TenantRetention,
   UpdateTenantBrandingRequestSchema,
+  UpdateTenantRetentionRequestSchema,
 } from "@proctoring/shared";
 import { Type } from "@sinclair/typebox";
-import { and, asc, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import { Auth } from "../auth/auth.decorator.js";
 import type { RequestAuth } from "../auth/request-auth.js";
@@ -29,9 +33,11 @@ import {
   type UserRow,
   users,
 } from "../db/schema/accounts.js";
+import { attempts, evidence, tests } from "../db/schema/tests.js";
 import { AuditAction, recordAudit } from "../lib/audit.js";
 import { buildInviteEmail, getEmailSender } from "../lib/email.js";
 import { AppError } from "../lib/errors.js";
+import { getEvidenceStore } from "../lib/evidence-store.js";
 import { hashPassword } from "../lib/password.js";
 import { serializeUser } from "../lib/serialize-account.js";
 import { revokeAllUserSessions } from "../lib/session.js";
@@ -235,6 +241,83 @@ export class OrgController {
         subdomain: organizations.subdomain,
       });
     return row;
+  }
+
+  @Get("retention")
+  async getRetention(@TenantId() tenantId: string): Promise<TenantRetention> {
+    const [row] = await db
+      .select({ retentionDays: organizations.retentionDays })
+      .from(organizations)
+      .where(eq(organizations.id, tenantId))
+      .limit(1);
+    if (!row) {
+      throw AppError.notFound("Tenant not found");
+    }
+    return row;
+  }
+
+  @Patch("retention")
+  @Roles("tenant_admin")
+  async updateRetention(
+    @TenantId() tenantId: string,
+    @Body() body: unknown,
+  ): Promise<TenantRetention> {
+    const dto = validate(UpdateTenantRetentionRequestSchema, body);
+    const [row] = await db
+      .update(organizations)
+      .set({ retentionDays: dto.retentionDays, updatedAt: new Date() })
+      .where(eq(organizations.id, tenantId))
+      .returning({ retentionDays: organizations.retentionDays });
+    return row;
+  }
+
+  /**
+   * Permanently erase a candidate's data within the tenant (right-to-erasure,
+   * CLAUDE.md §6). Deletes the S3 evidence bytes first, then the attempts —
+   * which cascades responses + evidence rows — so storage is never orphaned.
+   * Violation events live in the isolated violation-ingest service (ADR 0001);
+   * erasing them is a cross-service follow-up.
+   */
+  @Post("candidates/erase")
+  @Roles("tenant_admin")
+  async eraseCandidate(
+    @Auth() auth: RequestAuth,
+    @Body() body: unknown,
+  ): Promise<CandidateErasureResponse> {
+    const { candidateEmail } = validate(CandidateErasureRequestSchema, body);
+    const email = candidateEmail.trim().toLowerCase();
+
+    const rows = await db
+      .select({ id: attempts.id })
+      .from(attempts)
+      .innerJoin(tests, eq(attempts.testId, tests.id))
+      .where(and(eq(tests.orgId, auth.orgId), eq(attempts.candidateEmail, email)));
+    const attemptIds = rows.map((r) => r.id);
+
+    let evidenceDeleted = 0;
+    if (attemptIds.length > 0) {
+      const ev = await db
+        .select({ storageKey: evidence.storageKey })
+        .from(evidence)
+        .where(inArray(evidence.attemptId, attemptIds));
+      if (ev.length > 0) {
+        await getEvidenceStore().deleteObjects(ev.map((e) => e.storageKey));
+        evidenceDeleted = ev.length;
+      }
+      await db.delete(attempts).where(inArray(attempts.id, attemptIds));
+    }
+
+    // Counts only in the audit log — never the candidate's email/PII (§6).
+    recordAudit({
+      orgId: auth.orgId,
+      actorType: auth.actorType,
+      actorUserId: auth.userId,
+      action: AuditAction.CANDIDATE_DATA_ERASED,
+      targetType: "candidate",
+      metadata: { attemptsDeleted: attemptIds.length, evidenceDeleted },
+    });
+
+    return { candidateEmail: email, attemptsDeleted: attemptIds.length, evidenceDeleted };
   }
 }
 

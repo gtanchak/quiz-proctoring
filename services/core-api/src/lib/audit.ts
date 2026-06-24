@@ -24,6 +24,7 @@ export const AuditAction = {
   USER_ROLE_CHANGED: "user.role_changed",
   USER_REMOVED: "user.removed",
   EVIDENCE_DELETED: "evidence.deleted",
+  CANDIDATE_DATA_ERASED: "candidate.data_erased",
 } as const;
 
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];

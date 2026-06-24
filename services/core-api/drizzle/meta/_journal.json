@@ -92,6 +92,13 @@
 			"when": 1780685234695,
 			"tag": "0012_tenant_branding",
 			"breakpoints": true
+		},
+		{
+			"idx": 13,
+			"version": "7",
+			"when": 1780685234696,
+			"tag": "0013_tenant_retention",
+			"breakpoints": true
 		}
 	]
 }

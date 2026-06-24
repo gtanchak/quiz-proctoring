@@ -308,6 +308,49 @@ export type UpdateTenantBrandingRequest = Static<
   typeof UpdateTenantBrandingRequestSchema
 >;
 
+// --- Data retention & erasure (PRO-57, FR-41) -------------------------------
+
+const RetentionDaysSchema = Type.Integer({ minimum: 1, maximum: 3650 });
+
+/** A tenant's retention policy. `null` = retain indefinitely (platform default). */
+export const TenantRetentionSchema = Type.Object(
+  { retentionDays: Type.Union([RetentionDaysSchema, Type.Null()]) },
+  { additionalProperties: false },
+);
+export type TenantRetention = Static<typeof TenantRetentionSchema>;
+
+export const UpdateTenantRetentionRequestSchema = Type.Object(
+  { retentionDays: Type.Union([RetentionDaysSchema, Type.Null()]) },
+  { additionalProperties: false },
+);
+export type UpdateTenantRetentionRequest = Static<
+  typeof UpdateTenantRetentionRequestSchema
+>;
+
+/**
+ * Permanently erase a candidate's data within the tenant (the GDPR/DPDP
+ * right-to-erasure path, CLAUDE.md §6). Irreversible.
+ */
+export const CandidateErasureRequestSchema = Type.Object(
+  { candidateEmail: EmailSchema },
+  { additionalProperties: false },
+);
+export type CandidateErasureRequest = Static<
+  typeof CandidateErasureRequestSchema
+>;
+
+export const CandidateErasureResponseSchema = Type.Object(
+  {
+    candidateEmail: Type.String({ format: "email" }),
+    attemptsDeleted: Type.Integer(),
+    evidenceDeleted: Type.Integer(),
+  },
+  { additionalProperties: false },
+);
+export type CandidateErasureResponse = Static<
+  typeof CandidateErasureResponseSchema
+>;
+
 // --- Identity ("who am I") --------------------------------------------------
 
 /**

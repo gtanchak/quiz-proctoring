@@ -1,5 +1,6 @@
 import {
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -55,6 +56,13 @@ export const organizations = pgTable(
     primaryColor: text("primary_color"),
     /** Custom subdomain (DNS label), unique across tenants when set. */
     subdomain: text("subdomain"),
+    /**
+     * Data-retention policy (PRO-57, FR-41): days to retain candidate data
+     * before it is eligible for deletion. Null = retain indefinitely (platform
+     * default). Automated enforcement is a worker follow-up; the value is the
+     * policy of record and drives the manual erasure controls today.
+     */
+    retentionDays: integer("retention_days"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

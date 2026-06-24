@@ -50,6 +50,13 @@ export const tests = pgTable("tests", {
   availableFrom: timestamp("available_from", { withTimezone: true }),
   availableUntil: timestamp("available_until", { withTimezone: true }),
   maxAttempts: integer("max_attempts").notNull().default(1),
+  // Pre-start device-check requirements gated by modality (PRO-59, FR-12):
+  // which proctoring signals a candidate must grant. Shape =
+  // @proctoring/shared ProctoringRequirements. Default: none (MCQ needs no
+  // camera/mic); proctored/AI modalities set the signals they require.
+  proctoring: jsonb("proctoring")
+    .notNull()
+    .default({ camera: false, microphone: false, screen: false }),
   // Scoring config. Per-question points live on the questions table.
   passMark: integer("pass_mark"),
   negativeMarking: boolean("negative_marking").notNull().default(false),

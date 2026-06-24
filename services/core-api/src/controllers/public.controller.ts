@@ -13,6 +13,7 @@ import { Type } from "@sinclair/typebox";
 import {
   SnapshotMetadataSchema,
   SessionPhaseSchema,
+  type SessionProgress,
   canAdvanceSession,
 } from "@proctoring/shared";
 import { and, count, eq, inArray } from "drizzle-orm";
@@ -36,7 +37,7 @@ import {
 import { AppError } from "../lib/errors.js";
 import { getEvidenceStore } from "../lib/evidence-store.js";
 import { recordSessionEvent } from "../lib/session-events.js";
-import { computeDeadline } from "../lib/timer.js";
+import { computeDeadline, timerState } from "../lib/timer.js";
 import { validate } from "../lib/validate.js";
 import {
   autoExpireIfDue,
@@ -88,6 +89,9 @@ export class PublicController {
       durationMinutes: test.durationMinutes,
       accessMode: test.accessMode,
       state: linkState(test),
+      // Pre-start device checks the candidate must pass, gated by modality
+      // (FR-12). Empty/all-false means no device check is required (e.g. MCQ).
+      deviceCheck: test.proctoring,
     };
   }
 
@@ -147,6 +151,9 @@ export class PublicController {
           .set({ sessionTokenHash: session.hash })
           .where(eq(attempts.id, live.id))
           .returning();
+        await recordSessionEvent(resumed.id, "session_resumed", {
+          phase: resumed.phase,
+        });
         res.status(200);
         return {
           attempt: serializeAttempt(resumed, now),
@@ -198,6 +205,36 @@ export class PublicController {
   async getAttempt(@Headers("authorization") authorization: string | undefined) {
     const row = await resolveAttemptBySession(authorization);
     return serializeAttempt(await autoExpireIfDue(row));
+  }
+
+  /**
+   * Visible progress + server-authoritative time remaining (FR-16). Safe to
+   * call any time, including right after a reconnect (FR-17) to re-sync the
+   * candidate's countdown against the server clock.
+   */
+  @Get("attempt/progress")
+  async progress(
+    @Headers("authorization") authorization: string | undefined,
+  ): Promise<SessionProgress> {
+    const attempt = await autoExpireIfDue(
+      await resolveAttemptBySession(authorization),
+    );
+    const [[{ total }], [{ answered }]] = await Promise.all([
+      db
+        .select({ total: count() })
+        .from(questions)
+        .where(eq(questions.testId, attempt.testId)),
+      db
+        .select({ answered: count() })
+        .from(responses)
+        .where(eq(responses.attemptId, attempt.id)),
+    ]);
+    return {
+      phase: attempt.phase,
+      answered,
+      total,
+      remainingMs: timerState(attempt).remainingMs,
+    };
   }
 
   @Post("attempt/advance")

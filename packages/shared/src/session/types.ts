@@ -49,6 +49,7 @@ export function canAdvanceSession(from: SessionPhase, to: SessionPhase): boolean
  */
 export const SESSION_EVENT_TYPES = [
   "session_started",
+  "session_resumed",
   "phase_changed",
   "answers_saved",
   "snapshot_captured",

@@ -16,6 +16,7 @@
     "db:migrate": "tsx --env-file=.env src/db/migrate.ts",
     "key:create": "tsx --env-file=.env src/scripts/create-api-key.ts",
     "admin:create": "tsx --env-file=.env src/scripts/create-admin.ts",
+    "platform-admin:create": "tsx --env-file=.env src/scripts/create-platform-admin.ts",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {

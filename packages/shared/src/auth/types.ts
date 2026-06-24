@@ -222,6 +222,47 @@ export const ChangeRoleRequestSchema = Type.Object(
 );
 export type ChangeRoleRequest = Static<typeof ChangeRoleRequestSchema>;
 
+// --- Platform tenant provisioning (platform_admin only, PRO-57) -------------
+
+/**
+ * Provision a new tenant. The platform admin names the tenant and nominates its
+ * first `tenant_admin`; that admin sets their own password via an emailed link
+ * (we never provision credentials on their behalf — same flow as member invite).
+ */
+export const ProvisionTenantRequestSchema = Type.Object(
+  {
+    name: Type.String({ minLength: 1, maxLength: 200 }),
+    adminEmail: EmailSchema,
+    adminName: Type.String({ minLength: 1, maxLength: 200 }),
+  },
+  { additionalProperties: false },
+);
+export type ProvisionTenantRequest = Static<typeof ProvisionTenantRequestSchema>;
+
+/** Result of provisioning: the new tenant and its first (invited) admin. */
+export const ProvisionTenantResponseSchema = Type.Object(
+  {
+    tenant: OrganizationDtoSchema,
+    admin: UserDtoSchema,
+  },
+  { additionalProperties: false },
+);
+export type ProvisionTenantResponse = Static<
+  typeof ProvisionTenantResponseSchema
+>;
+
+/** A tenant as listed by a platform admin, with its member count. */
+export const TenantSummaryDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid" }),
+    name: Type.String(),
+    createdAt: Type.String({ format: "date-time" }),
+    memberCount: Type.Integer(),
+  },
+  { additionalProperties: false },
+);
+export type TenantSummaryDto = Static<typeof TenantSummaryDtoSchema>;
+
 // --- Identity ("who am I") --------------------------------------------------
 
 /**

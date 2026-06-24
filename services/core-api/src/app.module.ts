@@ -13,6 +13,7 @@ import { HealthController } from "./controllers/health.controller.js";
 import { InvitesController } from "./controllers/invites.controller.js";
 import { MeController } from "./controllers/me.controller.js";
 import { OrgController } from "./controllers/org.controller.js";
+import { PlatformController } from "./controllers/platform.controller.js";
 import { PublicController } from "./controllers/public.controller.js";
 import { QuestionsController } from "./controllers/questions.controller.js";
 import { ReportsController } from "./controllers/reports.controller.js";
@@ -40,6 +41,7 @@ import { AllExceptionsFilter } from "./lib/all-exceptions.filter.js";
     AuthController,
     MeController,
     OrgController,
+    PlatformController,
     TestsController,
     QuestionsController,
     InvitesController,

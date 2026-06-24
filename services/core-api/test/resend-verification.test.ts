@@ -1,6 +1,5 @@
-import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildApp } from "../src/app.js";
+import { createTestApp, type TestApp } from "./helpers/app.js";
 import { pool } from "../src/db/client.js";
 import { setEmailSender } from "../src/lib/email.js";
 import { CapturingEmailSender } from "./helpers/email.js";
@@ -9,13 +8,12 @@ import { cleanupOrgs } from "./helpers/seed.js";
 const PASSWORD = "correct-horse-battery-staple";
 
 describe("resend email verification (/v1/auth/request-verification)", () => {
-  let app: FastifyInstance;
+  let app: TestApp;
   const mail = new CapturingEmailSender();
   const orgIds: string[] = [];
 
   beforeAll(async () => {
-    app = buildApp();
-    await app.ready();
+    app = await createTestApp();
     setEmailSender(mail);
   });
 

@@ -1,5 +1,5 @@
-import type { FastifyBaseLogger } from "fastify";
 import { config } from "../config.js";
+import { type LoggerLike, defaultLogger } from "./logger.js";
 
 /**
  * Email delivery abstraction (PRO-39).
@@ -32,12 +32,12 @@ export function setEmailSender(sender: EmailSender | null): void {
   overrideSender = sender;
 }
 
-export function getEmailSender(log: FastifyBaseLogger): EmailSender {
+export function getEmailSender(log: LoggerLike = defaultLogger): EmailSender {
   return overrideSender ?? new LoggingEmailSender(log);
 }
 
 export class LoggingEmailSender implements EmailSender {
-  constructor(private readonly log: FastifyBaseLogger) {}
+  constructor(private readonly log: LoggerLike = defaultLogger) {}
 
   async send(msg: EmailMessage): Promise<void> {
     if (config.NODE_ENV === "production") {

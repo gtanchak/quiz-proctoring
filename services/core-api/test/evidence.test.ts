@@ -1,6 +1,5 @@
-import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { buildApp } from "../src/app.js";
+import { createTestApp, type TestApp } from "./helpers/app.js";
 import { pool } from "../src/db/client.js";
 import {
   type EvidenceStore,
@@ -47,7 +46,7 @@ function snapshotMeta(
 }
 
 describe("evidence storage & viewer (PRO-27)", () => {
-  let app: FastifyInstance;
+  let app: TestApp;
   let owner: SeededKey;
   let other: SeededKey;
 
@@ -102,8 +101,7 @@ describe("evidence storage & viewer (PRO-27)", () => {
   }
 
   beforeAll(async () => {
-    app = buildApp();
-    await app.ready();
+    app = await createTestApp();
     setEvidenceStore(fakeStore);
     owner = await seedOrgWithKey("evidence-owner");
     other = await seedOrgWithKey("evidence-other");

@@ -1,20 +1,18 @@
-import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildApp } from "../src/app.js";
+import { createTestApp, type TestApp } from "./helpers/app.js";
 import { db, pool } from "../src/db/client.js";
 import { attempts } from "../src/db/schema/tests.js";
 import { type SeededKey, cleanupOrgs, seedOrgWithKey } from "./helpers/seed.js";
 
 describe("tests resource (/v1/tests)", () => {
-  let app: FastifyInstance;
+  let app: TestApp;
   let ownerA: SeededKey;
   let ownerB: SeededKey;
 
   const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
   beforeAll(async () => {
-    app = buildApp();
-    await app.ready();
+    app = await createTestApp();
     ownerA = await seedOrgWithKey("owner-a");
     ownerB = await seedOrgWithKey("owner-b");
   });

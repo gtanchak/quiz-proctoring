@@ -1,13 +1,12 @@
 import { eq } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildApp } from "../src/app.js";
+import { createTestApp, type TestApp } from "./helpers/app.js";
 import { db, pool } from "../src/db/client.js";
 import { attempts, questions } from "../src/db/schema/tests.js";
 import { type SeededKey, cleanupOrgs, seedOrgWithKey } from "./helpers/seed.js";
 
 describe("MCQ question authoring (/v1/tests/:testId/questions)", () => {
-  let app: FastifyInstance;
+  let app: TestApp;
   let ownerA: SeededKey;
   let ownerB: SeededKey;
   let testId: string;
@@ -26,8 +25,7 @@ describe("MCQ question authoring (/v1/tests/:testId/questions)", () => {
   };
 
   beforeAll(async () => {
-    app = buildApp();
-    await app.ready();
+    app = await createTestApp();
     ownerA = await seedOrgWithKey("q-owner-a");
     ownerB = await seedOrgWithKey("q-owner-b");
     const created = await app.inject({

@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
+import type { INestApplication } from "@nestjs/common";
 import { eq, inArray } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
 import { VIOLATION_SCHEMA_VERSION } from "@proctoring/shared";
+import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildApp } from "../src/app.js";
+import { createApp } from "../src/app.factory.js";
 import { db, pool } from "../src/db/client.js";
 import { apiKeys, attempts } from "../src/db/schema/external.js";
 import { violations } from "../src/db/schema/violations.js";
@@ -35,10 +36,12 @@ async function seedApiKey(): Promise<{ id: string; token: string }> {
 }
 
 describe("violation ingest + read API", () => {
-  let app: FastifyInstance;
+  let app: INestApplication;
   let attempt: { id: string; token: string };
   let orderAttempt: { id: string; token: string };
   let admin: { id: string; token: string };
+
+  const server = () => app.getHttpServer();
 
   /** A valid event for `attempt`, with overrides for the field under test. */
   function event(overrides: Record<string, unknown> = {}) {
@@ -54,8 +57,8 @@ describe("violation ingest + read API", () => {
   }
 
   beforeAll(async () => {
-    app = buildApp();
-    await app.ready();
+    app = await createApp();
+    await app.init();
     attempt = await seedAttempt();
     orderAttempt = await seedAttempt();
     admin = await seedApiKey();
@@ -75,35 +78,29 @@ describe("violation ingest + read API", () => {
 
   describe("POST /v1/violations", () => {
     it("rejects a request with no session token (401)", async () => {
-      const res = await app.inject({
-        method: "POST",
-        url: "/v1/violations",
-        payload: { attemptId: attempt.id, events: [event()] },
-      });
-      expect(res.statusCode).toBe(401);
-      expect(res.json().error.code).toBe("UNAUTHORIZED");
+      const res = await request(server())
+        .post("/v1/violations")
+        .send({ attemptId: attempt.id, events: [event()] });
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe("UNAUTHORIZED");
     });
 
     it("rejects an unknown session token (401)", async () => {
-      const res = await app.inject({
-        method: "POST",
-        url: "/v1/violations",
-        headers: auth(randomUUID()),
-        payload: { attemptId: attempt.id, events: [event()] },
-      });
-      expect(res.statusCode).toBe(401);
+      const res = await request(server())
+        .post("/v1/violations")
+        .set(auth(randomUUID()))
+        .send({ attemptId: attempt.id, events: [event()] });
+      expect(res.status).toBe(401);
     });
 
     it("accepts a valid batch and persists it", async () => {
       const events = [event(), event({ type: "fullscreen_exit" })];
-      const res = await app.inject({
-        method: "POST",
-        url: "/v1/violations",
-        headers: auth(attempt.token),
-        payload: { attemptId: attempt.id, events },
-      });
-      expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ accepted: 2, stored: 2, duplicates: 0 });
+      const res = await request(server())
+        .post("/v1/violations")
+        .set(auth(attempt.token))
+        .send({ attemptId: attempt.id, events });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ accepted: 2, stored: 2, duplicates: 0 });
 
       const stored = await db
         .select()
@@ -118,35 +115,29 @@ describe("violation ingest + read API", () => {
     it("is idempotent: re-posting the same event ids stores nothing new", async () => {
       const e = event();
       const payload = { attemptId: attempt.id, events: [e] };
-      const first = await app.inject({
-        method: "POST",
-        url: "/v1/violations",
-        headers: auth(attempt.token),
-        payload,
-      });
-      expect(first.json()).toEqual({ accepted: 1, stored: 1, duplicates: 0 });
+      const first = await request(server())
+        .post("/v1/violations")
+        .set(auth(attempt.token))
+        .send(payload);
+      expect(first.body).toEqual({ accepted: 1, stored: 1, duplicates: 0 });
 
       // Simulates a client retry after a brief disconnect.
-      const retry = await app.inject({
-        method: "POST",
-        url: "/v1/violations",
-        headers: auth(attempt.token),
-        payload,
-      });
-      expect(retry.statusCode).toBe(200);
-      expect(retry.json()).toEqual({ accepted: 1, stored: 0, duplicates: 1 });
+      const retry = await request(server())
+        .post("/v1/violations")
+        .set(auth(attempt.token))
+        .send(payload);
+      expect(retry.status).toBe(200);
+      expect(retry.body).toEqual({ accepted: 1, stored: 0, duplicates: 1 });
     });
 
     it("defaults an omitted schemaVersion (versioned schema)", async () => {
       const e = event();
       delete (e as Record<string, unknown>).schemaVersion;
-      const res = await app.inject({
-        method: "POST",
-        url: "/v1/violations",
-        headers: auth(attempt.token),
-        payload: { attemptId: attempt.id, events: [e] },
-      });
-      expect(res.statusCode).toBe(200);
+      const res = await request(server())
+        .post("/v1/violations")
+        .set(auth(attempt.token))
+        .send({ attemptId: attempt.id, events: [e] });
+      expect(res.status).toBe(200);
       const [stored] = await db
         .select()
         .from(violations)
@@ -156,79 +147,64 @@ describe("violation ingest + read API", () => {
 
     it("rejects a batch whose attemptId is not the authenticated attempt (400)", async () => {
       const otherId = randomUUID();
-      const res = await app.inject({
-        method: "POST",
-        url: "/v1/violations",
-        headers: auth(attempt.token),
-        payload: { attemptId: otherId, events: [event({ attemptId: otherId })] },
-      });
-      expect(res.statusCode).toBe(400);
-      expect(res.json().error.code).toBe("BAD_REQUEST");
+      const res = await request(server())
+        .post("/v1/violations")
+        .set(auth(attempt.token))
+        .send({ attemptId: otherId, events: [event({ attemptId: otherId })] });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("BAD_REQUEST");
     });
 
     it("rejects an invalid event (unknown type) with a VALIDATION error", async () => {
-      const res = await app.inject({
-        method: "POST",
-        url: "/v1/violations",
-        headers: auth(attempt.token),
-        payload: { attemptId: attempt.id, events: [event({ type: "not_a_type" })] },
-      });
-      expect(res.statusCode).toBe(400);
-      expect(res.json().error.code).toBe("VALIDATION");
+      const res = await request(server())
+        .post("/v1/violations")
+        .set(auth(attempt.token))
+        .send({ attemptId: attempt.id, events: [event({ type: "not_a_type" })] });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("VALIDATION");
     });
 
     it("rejects an empty batch (400)", async () => {
-      const res = await app.inject({
-        method: "POST",
-        url: "/v1/violations",
-        headers: auth(attempt.token),
-        payload: { attemptId: attempt.id, events: [] },
-      });
-      expect(res.statusCode).toBe(400);
+      const res = await request(server())
+        .post("/v1/violations")
+        .set(auth(attempt.token))
+        .send({ attemptId: attempt.id, events: [] });
+      expect(res.status).toBe(400);
     });
   });
 
   describe("GET /v1/violations", () => {
     it("requires an admin API key, not an attempt session token (401)", async () => {
-      const res = await app.inject({
-        method: "GET",
-        url: `/v1/violations?attemptId=${orderAttempt.id}`,
-        headers: auth(orderAttempt.token),
-      });
-      expect(res.statusCode).toBe(401);
+      const res = await request(server())
+        .get(`/v1/violations?attemptId=${orderAttempt.id}`)
+        .set(auth(orderAttempt.token));
+      expect(res.status).toBe(401);
     });
 
     it("returns an attempt's events in chronological order", async () => {
       const base = Date.now();
       // Post out of chronological order; the API must sort by startedAt.
-      const events = [
-        { offset: 2000 },
-        { offset: 0 },
-        { offset: 1000 },
-      ].map(({ offset }) => ({
-        schemaVersion: VIOLATION_SCHEMA_VERSION,
-        id: randomUUID(),
-        attemptId: orderAttempt.id,
-        type: "window_blur",
-        severity: "low",
-        startedAt: new Date(base + offset).toISOString(),
-      }));
-      const post = await app.inject({
-        method: "POST",
-        url: "/v1/violations",
-        headers: auth(orderAttempt.token),
-        payload: { attemptId: orderAttempt.id, events },
-      });
-      expect(post.statusCode).toBe(200);
+      const events = [{ offset: 2000 }, { offset: 0 }, { offset: 1000 }].map(
+        ({ offset }) => ({
+          schemaVersion: VIOLATION_SCHEMA_VERSION,
+          id: randomUUID(),
+          attemptId: orderAttempt.id,
+          type: "window_blur",
+          severity: "low",
+          startedAt: new Date(base + offset).toISOString(),
+        }),
+      );
+      const post = await request(server())
+        .post("/v1/violations")
+        .set(auth(orderAttempt.token))
+        .send({ attemptId: orderAttempt.id, events });
+      expect(post.status).toBe(200);
 
-      const res = await app.inject({
-        method: "GET",
-        url: `/v1/violations?attemptId=${orderAttempt.id}`,
-        headers: auth(admin.token),
-      });
-      expect(res.statusCode).toBe(200);
-      const body = res.json();
-      const times = body.data.map((r: { startedAt: string }) =>
+      const res = await request(server())
+        .get(`/v1/violations?attemptId=${orderAttempt.id}`)
+        .set(auth(admin.token));
+      expect(res.status).toBe(200);
+      const times = res.body.data.map((r: { startedAt: string }) =>
         new Date(r.startedAt).getTime(),
       );
       expect(times).toEqual([...times].sort((a, b) => a - b));
@@ -236,15 +212,12 @@ describe("violation ingest + read API", () => {
     });
 
     it("honours limit/offset pagination", async () => {
-      const res = await app.inject({
-        method: "GET",
-        url: `/v1/violations?attemptId=${orderAttempt.id}&limit=1&offset=1`,
-        headers: auth(admin.token),
-      });
-      expect(res.statusCode).toBe(200);
-      const body = res.json();
-      expect(body.data).toHaveLength(1);
-      expect(body.pagination).toEqual({ limit: 1, offset: 1 });
+      const res = await request(server())
+        .get(`/v1/violations?attemptId=${orderAttempt.id}&limit=1&offset=1`)
+        .set(auth(admin.token));
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.pagination).toEqual({ limit: 1, offset: 1 });
     });
   });
 });

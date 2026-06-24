@@ -1,21 +1,23 @@
+import { Controller, Get, Param } from "@nestjs/common";
 import { Type } from "@sinclair/typebox";
-import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
 import {
   ATTEMPT_REPORT_SCHEMA_VERSION,
-  AttemptReportSchema,
   type AttemptReport,
   type AttemptReportSummary,
   type AttemptTerminationReason,
   type ReportViolation,
 } from "@proctoring/shared";
 import { and, eq } from "drizzle-orm";
-import { db } from "../../db/client.js";
-import { type AttemptRow, attempts, tests } from "../../db/schema/tests.js";
-import { AppError } from "../../lib/errors.js";
+import { Auth } from "../auth/auth.decorator.js";
+import type { RequestAuth } from "../auth/request-auth.js";
+import { db } from "../db/client.js";
+import { type AttemptRow, attempts, tests } from "../db/schema/tests.js";
+import { AppError } from "../lib/errors.js";
+import { validate } from "../lib/validate.js";
 import {
   getViolationsClient,
   type IngestedViolation,
-} from "../../lib/violations-client.js";
+} from "../lib/violations-client.js";
 
 const IdParams = Type.Object({ id: Type.String({ format: "uuid" }) });
 
@@ -31,35 +33,21 @@ interface ReportTest {
  * the isolated violation-ingest service and assembles the report.
  *
  * Access control: the URL is the attempt's unguessable UUID, and the query is
- * scoped to the caller's org — a non-owner gets 404 (never leaking existence),
- * satisfying "unguessable and scoped to the owner".
+ * scoped to the caller's org — a non-owner gets 404 (never leaking existence).
  */
-export const reportsRoutes: FastifyPluginAsyncTypebox = async (app) => {
-  app.get(
-    "/attempts/:id/report",
-    {
-      schema: {
-        tags: ["reports"],
-        summary: "Per-attempt report: summary + violation timeline",
-        security: [{ bearerAuth: [] }],
-        params: IdParams,
-        response: {
-          200: AttemptReportSchema,
-          404: Type.Ref("ErrorResponse"),
-          502: Type.Ref("ErrorResponse"),
-        },
-      },
-    },
-    async (request) => {
-      const { attempt, test } = await loadOwnedAttempt(
-        request.params.id,
-        request.auth!.orgId,
-      );
-      const violations = await getViolationsClient().listForAttempt(attempt.id);
-      return buildReport(attempt, test, violations);
-    },
-  );
-};
+@Controller("v1")
+export class ReportsController {
+  @Get("attempts/:id/report")
+  async report(
+    @Auth() auth: RequestAuth,
+    @Param() params: Record<string, string>,
+  ): Promise<AttemptReport> {
+    const { id } = validate(IdParams, params);
+    const { attempt, test } = await loadOwnedAttempt(id, auth.orgId);
+    const violations = await getViolationsClient().listForAttempt(attempt.id);
+    return buildReport(attempt, test, violations);
+  }
+}
 
 /** Loads an attempt and its test, scoped to the org, or throws 404. */
 async function loadOwnedAttempt(
@@ -91,7 +79,9 @@ async function loadOwnedAttempt(
 }
 
 /** Why a finished attempt ended, when it was not a clean candidate submit. */
-function terminationReason(status: AttemptRow["status"]): AttemptTerminationReason | null {
+function terminationReason(
+  status: AttemptRow["status"],
+): AttemptTerminationReason | null {
   if (status === "expired") return "deadline_reached";
   if (status === "abandoned") return "abandoned";
   return null;

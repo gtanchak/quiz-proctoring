@@ -1,13 +1,13 @@
+import { SwaggerModule } from "@nestjs/swagger";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { FastifyInstance } from "fastify";
-import { buildApp } from "../src/app.js";
+import { openApiConfig } from "../src/app.factory.js";
+import { createTestApp, type TestApp } from "./helpers/app.js";
 
 describe("core-api foundation", () => {
-  let app: FastifyInstance;
+  let app: TestApp;
 
   beforeAll(async () => {
-    app = buildApp();
-    await app.ready();
+    app = await createTestApp();
   });
 
   afterAll(async () => {
@@ -35,13 +35,13 @@ describe("core-api foundation", () => {
   });
 
   it("generates an OpenAPI spec that includes /health", () => {
-    const spec = app.swagger();
+    const spec = SwaggerModule.createDocument(app.nest, openApiConfig());
     expect(spec.openapi).toBeDefined();
     expect(spec.paths?.["/health"]).toBeDefined();
   });
 
   it("serves Swagger UI at /docs", async () => {
-    const res = await app.inject({ method: "GET", url: "/docs/" });
+    const res = await app.inject({ method: "GET", url: "/docs" });
     expect(res.statusCode).toBe(200);
   });
 });

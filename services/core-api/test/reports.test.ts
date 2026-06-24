@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { buildApp } from "../src/app.js";
+import { createTestApp, type TestApp } from "./helpers/app.js";
 import { db, pool } from "../src/db/client.js";
 import { type AttemptRow, attempts } from "../src/db/schema/tests.js";
 import { AppError } from "../src/lib/errors.js";
@@ -45,7 +44,7 @@ function violation(
 }
 
 describe("per-attempt report (/v1/attempts/:id/report)", () => {
-  let app: FastifyInstance;
+  let app: TestApp;
   let ownerA: SeededKey;
   let ownerB: SeededKey;
   let testId: string;
@@ -66,8 +65,7 @@ describe("per-attempt report (/v1/attempts/:id/report)", () => {
   }
 
   beforeAll(async () => {
-    app = buildApp();
-    await app.ready();
+    app = await createTestApp();
     setViolationsClient(stubClient);
     ownerA = await seedOrgWithKey("report-owner-a");
     ownerB = await seedOrgWithKey("report-owner-b");

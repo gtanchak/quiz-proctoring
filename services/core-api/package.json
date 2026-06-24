@@ -2,7 +2,7 @@
   "name": "@proctoring/core-api",
   "version": "0.0.0",
   "private": true,
-  "description": "Core API: tests, attempts, users, public REST API. Authoritative for the test timer. (Fastify)",
+  "description": "Core API: tests, attempts, users, public REST API. Authoritative for the test timer. (NestJS)",
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file=.env src/server.ts",
@@ -21,22 +21,28 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1062.0",
     "@aws-sdk/s3-request-presigner": "^3.1062.0",
-    "@fastify/rate-limit": "^10.2.2",
-    "@fastify/swagger": "^9.4.2",
-    "@fastify/swagger-ui": "^5.2.1",
-    "@fastify/type-provider-typebox": "^5.1.0",
+    "@nestjs/common": "^10.4.15",
+    "@nestjs/core": "^10.4.15",
+    "@nestjs/platform-express": "^10.4.15",
+    "@nestjs/swagger": "^8.1.0",
+    "@nestjs/throttler": "^6.4.0",
     "@proctoring/shared": "workspace:*",
     "@sinclair/typebox": "^0.34.13",
     "drizzle-orm": "^0.38.3",
-    "fastify": "^5.2.0",
-    "fastify-plugin": "^5.0.1",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
   },
   "devDependencies": {
+    "@swc/core": "^1.10.7",
+    "@types/express": "^5.0.0",
     "@types/node": "^22.10.5",
     "@types/pg": "^8.11.10",
+    "@types/supertest": "^6.0.2",
     "drizzle-kit": "^0.30.1",
+    "supertest": "^7.0.0",
     "tsx": "^4.19.2",
+    "unplugin-swc": "^1.5.1",
     "vitest": "^2.1.8"
   }
 }

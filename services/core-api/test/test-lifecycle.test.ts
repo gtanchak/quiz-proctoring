@@ -1,12 +1,11 @@
-import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildApp } from "../src/app.js";
+import { createTestApp, type TestApp } from "./helpers/app.js";
 import { db, pool } from "../src/db/client.js";
 import { attempts, questions } from "../src/db/schema/tests.js";
 import { type SeededKey, cleanupOrgs, seedOrgWithKey } from "./helpers/seed.js";
 
 describe("test configuration & publish lifecycle", () => {
-  let app: FastifyInstance;
+  let app: TestApp;
   let seeded: SeededKey;
 
   const auth = () => ({ authorization: `Bearer ${seeded.token}` });
@@ -15,8 +14,7 @@ describe("test configuration & publish lifecycle", () => {
     app.inject({ method: "POST", url: "/v1/tests", headers: auth(), payload });
 
   beforeAll(async () => {
-    app = buildApp();
-    await app.ready();
+    app = await createTestApp();
     seeded = await seedOrgWithKey("lifecycle");
   });
 

@@ -21,7 +21,8 @@ const ConfigSchema = Type.Object({
   DATABASE_URL: Type.String({ minLength: 1 }),
   /** Max ingest requests per window, per attempt (or IP). Backpressure guard. */
   RATE_LIMIT_MAX: Type.Number({ default: 600 }),
-  RATE_LIMIT_WINDOW: Type.String({ default: "1 minute" }),
+  /** Rate-limit window in milliseconds (NestJS throttler `ttl`). */
+  RATE_LIMIT_TTL_MS: Type.Number({ default: 60_000 }),
 });
 
 export type Config = Static<typeof ConfigSchema>;

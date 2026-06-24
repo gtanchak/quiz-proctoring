@@ -25,8 +25,8 @@ const ConfigSchema = Type.Object({
   DATABASE_URL: Type.String({ minLength: 1 }),
   /** Max requests per window, per API key (or per IP for unauthenticated routes). */
   RATE_LIMIT_MAX: Type.Number({ default: 100 }),
-  /** Rate-limit window, e.g. "1 minute", "15 seconds". */
-  RATE_LIMIT_WINDOW: Type.String({ default: "1 minute" }),
+  /** Rate-limit window in milliseconds (NestJS throttler `ttl`). */
+  RATE_LIMIT_TTL_MS: Type.Number({ default: 60_000 }),
 
   // --- Accounts & auth (PRO-39) ---------------------------------------------
   /** Sliding session lifetime in seconds (refreshed on use). Default 7 days. */

@@ -8,8 +8,7 @@ import {
   type ReportViolation,
 } from "@proctoring/shared";
 import { and, eq } from "drizzle-orm";
-import { Auth } from "../auth/auth.decorator.js";
-import type { RequestAuth } from "../auth/request-auth.js";
+import { TenantId } from "../auth/tenant.decorator.js";
 import { db } from "../db/client.js";
 import { type AttemptRow, attempts, tests } from "../db/schema/tests.js";
 import { AppError } from "../lib/errors.js";
@@ -39,11 +38,11 @@ interface ReportTest {
 export class ReportsController {
   @Get("attempts/:id/report")
   async report(
-    @Auth() auth: RequestAuth,
+    @TenantId() tenantId: string,
     @Param() params: Record<string, string>,
   ): Promise<AttemptReport> {
     const { id } = validate(IdParams, params);
-    const { attempt, test } = await loadOwnedAttempt(id, auth.orgId);
+    const { attempt, test } = await loadOwnedAttempt(id, tenantId);
     const violations = await getViolationsClient().listForAttempt(attempt.id);
     return buildReport(attempt, test, violations);
   }

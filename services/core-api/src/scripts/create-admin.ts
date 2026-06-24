@@ -4,7 +4,7 @@ import { organizations, users } from "../db/schema/accounts.js";
 import { hashPassword } from "../lib/password.js";
 
 /**
- * Bootstraps an organization and its first `owner` user, with email already
+ * Bootstraps an organization and its first `tenant_admin` user, with email already
  * verified — so an operator can stand up a working account in dev without the
  * email-delivery infrastructure (SES, PRO-38).
  *
@@ -47,7 +47,7 @@ const [user] = await db
     orgId: org.id,
     email,
     name,
-    role: "owner",
+    role: "tenant_admin",
     passwordHash: hashPassword(password),
     emailVerifiedAt: new Date(),
   })
@@ -56,4 +56,4 @@ const [user] = await db
 await pool.end();
 
 console.log(`Created organization "${orgName}" (id: ${org.id})`);
-console.log(`Created owner "${email}" (id: ${user.id}) — email pre-verified.`);
+console.log(`Created tenant_admin "${email}" (id: ${user.id}) — email pre-verified.`);

@@ -1,7 +1,7 @@
 # ADR 0002 — Assessment engine & assessment-type contract
 
-- **Status:** Proposed (PRO-56) — pending team review
-- **Date:** 2026-06-22
+- **Status:** Accepted (PRO-56) — backend migration to NestJS landed on `develop`
+- **Date:** 2026-06-22 (accepted 2026-06-24)
 - **Context source:** AI Interview & Assessment Platform — engine architecture spike (PRO-56)
 - **Supersedes (in part):** CLAUDE.md §2 backend-framework lock (see Decision 3)
 
@@ -161,6 +161,16 @@ non-null `tenant_id`), **not** schema-per-tenant.
   a future ADR, not a default.
 - Evidence, recordings, and any biometric/ID data are partitioned by tenant in
   S3 prefixes and served only via signed, time-limited URLs (CLAUDE.md §5/§6).
+
+> **Implementation status (PRO-57).** The existing `organizations` table **is**
+> the tenant; `tenant_id` == `orgId`. The structural application-layer guard is
+> in place (`TenantGuard` resolves the tenant from auth and every tenant-owned
+> query is scoped by it; cross-tenant access returns 404, proven by
+> `test/tenant-isolation.test.ts` across tests/attempts/questions/evidence/
+> reports/invites). **Postgres row-level security as DB-level defence-in-depth
+> is deferred to a dedicated follow-up** — it needs per-request transactional
+> tenant context (`SET LOCAL`), which is a deliberate change from the current
+> pooled, non-transactional query style and is best done on its own.
 
 ### 5. Core data model (engine-owned)
 

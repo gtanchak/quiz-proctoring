@@ -77,7 +77,7 @@ describe("role gating & org isolation", () => {
   async function invitedMember(
     ownerToken: string,
     email: string,
-    role: "admin" | "viewer",
+    role: "recruiter" | "reviewer",
   ): Promise<{ token: string; userId: string }> {
     const invite = await app.inject({
       method: "POST",
@@ -104,8 +104,8 @@ describe("role gating & org isolation", () => {
 
   it("lets viewers read but not mutate; admins can mutate", async () => {
     const acct = await newAccount("rg");
-    const viewer = await invitedMember(acct.ownerToken, "rg-viewer@example.com", "viewer");
-    const admin = await invitedMember(acct.ownerToken, "rg-admin@example.com", "admin");
+    const viewer = await invitedMember(acct.ownerToken, "rg-viewer@example.com", "reviewer");
+    const admin = await invitedMember(acct.ownerToken, "rg-admin@example.com", "recruiter");
 
     // Admin creates a test.
     const created = await app.inject({
@@ -140,14 +140,14 @@ describe("role gating & org isolation", () => {
 
   it("lets only the owner change roles, and records an audit entry", async () => {
     const acct = await newAccount("rc");
-    const viewer = await invitedMember(acct.ownerToken, "rc-viewer@example.com", "viewer");
+    const viewer = await invitedMember(acct.ownerToken, "rc-viewer@example.com", "reviewer");
 
     // A non-owner cannot change roles.
     const byViewer = await app.inject({
       method: "PATCH",
       url: `/v1/org/users/${viewer.userId}/role`,
       headers: bearer(viewer.token),
-      payload: { role: "admin" },
+      payload: { role: "recruiter" },
     });
     expect(byViewer.statusCode).toBe(403);
 
@@ -156,10 +156,10 @@ describe("role gating & org isolation", () => {
       method: "PATCH",
       url: `/v1/org/users/${viewer.userId}/role`,
       headers: bearer(acct.ownerToken),
-      payload: { role: "admin" },
+      payload: { role: "recruiter" },
     });
     expect(byOwner.statusCode).toBe(200);
-    expect(byOwner.json().role).toBe("admin");
+    expect(byOwner.json().role).toBe("recruiter");
 
     const audit = await waitFor(async () => {
       const [row] = await db
@@ -175,14 +175,14 @@ describe("role gating & org isolation", () => {
         .limit(1);
       return row;
     });
-    expect(audit.metadata).toMatchObject({ from: "viewer", to: "admin" });
+    expect(audit.metadata).toMatchObject({ from: "reviewer", to: "recruiter" });
 
     // The owner's own role is protected.
     const protect = await app.inject({
       method: "PATCH",
       url: `/v1/org/users/${acct.ownerUserId}/role`,
       headers: bearer(acct.ownerToken),
-      payload: { role: "admin" },
+      payload: { role: "recruiter" },
     });
     expect(protect.statusCode).toBe(400);
   });

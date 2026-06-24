@@ -1,4 +1,4 @@
-import { Type, type Static } from "@sinclair/typebox";
+import { Type, type Static, type TSchema } from "@sinclair/typebox";
 
 /**
  * Authentication & accounts contract (PRO-39).
@@ -18,20 +18,30 @@ import { Type, type Static } from "@sinclair/typebox";
  */
 
 /**
- * Account roles, most-privileged first:
- * - `owner`  — created the account; can manage members, roles, and the org.
- * - `admin`  — full read/write on tests, attempts, and reports.
- * - `viewer` — read-only (a reviewer who inspects results but cannot edit).
+ * Account roles, most-privileged first (PRO-57 multi-tenant taxonomy):
+ * - `platform_admin` — cross-tenant super-admin (provisions tenants). Not scoped
+ *   to a single tenant's data.
+ * - `tenant_admin`   — created/owns the tenant; manages members, roles, settings.
+ * - `recruiter`      — full read/write on tests, attempts, and reports.
+ * - `reviewer`       — read-only (inspects results but cannot edit).
+ * - `candidate`      — the assessment taker (reserved; candidates authenticate by
+ *   per-attempt session token today, not a user account).
  */
-export const ROLES = ["owner", "admin", "viewer"] as const;
+export const ROLES = [
+  "platform_admin",
+  "tenant_admin",
+  "recruiter",
+  "reviewer",
+  "candidate",
+] as const;
 export type Role = (typeof ROLES)[number];
 
 export const RoleSchema = Type.Union(ROLES.map((r) => Type.Literal(r)), {
   description: "Account role (see ROLES)",
 });
 
-/** Roles that may mutate tests/questions/invites/attempts. `viewer` may not. */
-export const WRITE_ROLES = ["owner", "admin"] as const;
+/** Roles that may mutate tests/questions/invites/attempts. `reviewer` may not. */
+export const WRITE_ROLES = ["tenant_admin", "recruiter"] as const;
 
 /** What kind of credential authenticated a request. */
 export const ACTOR_TYPES = ["user", "apiKey"] as const;
@@ -185,16 +195,16 @@ export type UpdateProfileRequest = Static<typeof UpdateProfileRequestSchema>;
 
 // --- Org member management (owner-only) -------------------------------------
 
-/** Assignable roles for members — `owner` is established at signup, not granted. */
+/** Assignable roles for members — `tenant_admin` is established at signup, not granted. */
 const AssignableRoleSchema = Type.Union([
-  Type.Literal("admin"),
-  Type.Literal("viewer"),
+  Type.Literal("recruiter"),
+  Type.Literal("reviewer"),
 ]);
 
 /**
- * Invite a teammate into the org. No password here — the invited member sets
+ * Invite a teammate into the tenant. No password here — the invited member sets
  * their own password via an emailed link (the user creates their own
- * credentials; the owner only grants the seat and role).
+ * credentials; the tenant admin only grants the seat and role).
  */
 export const CreateMemberRequestSchema = Type.Object(
   {
@@ -211,6 +221,135 @@ export const ChangeRoleRequestSchema = Type.Object(
   { additionalProperties: false },
 );
 export type ChangeRoleRequest = Static<typeof ChangeRoleRequestSchema>;
+
+// --- Platform tenant provisioning (platform_admin only, PRO-57) -------------
+
+/**
+ * Provision a new tenant. The platform admin names the tenant and nominates its
+ * first `tenant_admin`; that admin sets their own password via an emailed link
+ * (we never provision credentials on their behalf — same flow as member invite).
+ */
+export const ProvisionTenantRequestSchema = Type.Object(
+  {
+    name: Type.String({ minLength: 1, maxLength: 200 }),
+    adminEmail: EmailSchema,
+    adminName: Type.String({ minLength: 1, maxLength: 200 }),
+  },
+  { additionalProperties: false },
+);
+export type ProvisionTenantRequest = Static<typeof ProvisionTenantRequestSchema>;
+
+/** Result of provisioning: the new tenant and its first (invited) admin. */
+export const ProvisionTenantResponseSchema = Type.Object(
+  {
+    tenant: OrganizationDtoSchema,
+    admin: UserDtoSchema,
+  },
+  { additionalProperties: false },
+);
+export type ProvisionTenantResponse = Static<
+  typeof ProvisionTenantResponseSchema
+>;
+
+/** A tenant as listed by a platform admin, with its member count. */
+export const TenantSummaryDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid" }),
+    name: Type.String(),
+    createdAt: Type.String({ format: "date-time" }),
+    memberCount: Type.Integer(),
+  },
+  { additionalProperties: false },
+);
+export type TenantSummaryDto = Static<typeof TenantSummaryDtoSchema>;
+
+// --- Per-tenant branding (PRO-57, FR-39) ------------------------------------
+
+const NullableString = <T extends TSchema>(schema: T) =>
+  Type.Union([schema, Type.Null()]);
+
+/** A logo URL (https), a hex colour, and a DNS-label subdomain. */
+const LogoUrlSchema = Type.String({ maxLength: 2000 });
+const ColorSchema = Type.String({
+  pattern: "^#[0-9a-fA-F]{6}$",
+  description: "Hex colour, e.g. #1a2b3c",
+});
+const SubdomainSchema = Type.String({
+  pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+  minLength: 1,
+  maxLength: 63,
+  description: "Lowercase DNS label (a–z, 0–9, hyphen)",
+});
+
+/** A tenant's current branding (nulls mean "use platform defaults"). */
+export const TenantBrandingSchema = Type.Object(
+  {
+    logoUrl: NullableString(LogoUrlSchema),
+    primaryColor: NullableString(ColorSchema),
+    subdomain: NullableString(SubdomainSchema),
+  },
+  { additionalProperties: false },
+);
+export type TenantBranding = Static<typeof TenantBrandingSchema>;
+
+/**
+ * Update tenant branding (tenant_admin). Every field is optional; an explicit
+ * `null` clears it back to the platform default.
+ */
+export const UpdateTenantBrandingRequestSchema = Type.Object(
+  {
+    logoUrl: Type.Optional(NullableString(LogoUrlSchema)),
+    primaryColor: Type.Optional(NullableString(ColorSchema)),
+    subdomain: Type.Optional(NullableString(SubdomainSchema)),
+  },
+  { additionalProperties: false },
+);
+export type UpdateTenantBrandingRequest = Static<
+  typeof UpdateTenantBrandingRequestSchema
+>;
+
+// --- Data retention & erasure (PRO-57, FR-41) -------------------------------
+
+const RetentionDaysSchema = Type.Integer({ minimum: 1, maximum: 3650 });
+
+/** A tenant's retention policy. `null` = retain indefinitely (platform default). */
+export const TenantRetentionSchema = Type.Object(
+  { retentionDays: Type.Union([RetentionDaysSchema, Type.Null()]) },
+  { additionalProperties: false },
+);
+export type TenantRetention = Static<typeof TenantRetentionSchema>;
+
+export const UpdateTenantRetentionRequestSchema = Type.Object(
+  { retentionDays: Type.Union([RetentionDaysSchema, Type.Null()]) },
+  { additionalProperties: false },
+);
+export type UpdateTenantRetentionRequest = Static<
+  typeof UpdateTenantRetentionRequestSchema
+>;
+
+/**
+ * Permanently erase a candidate's data within the tenant (the GDPR/DPDP
+ * right-to-erasure path, CLAUDE.md §6). Irreversible.
+ */
+export const CandidateErasureRequestSchema = Type.Object(
+  { candidateEmail: EmailSchema },
+  { additionalProperties: false },
+);
+export type CandidateErasureRequest = Static<
+  typeof CandidateErasureRequestSchema
+>;
+
+export const CandidateErasureResponseSchema = Type.Object(
+  {
+    candidateEmail: Type.String({ format: "email" }),
+    attemptsDeleted: Type.Integer(),
+    evidenceDeleted: Type.Integer(),
+  },
+  { additionalProperties: false },
+);
+export type CandidateErasureResponse = Static<
+  typeof CandidateErasureResponseSchema
+>;
 
 // --- Identity ("who am I") --------------------------------------------------
 

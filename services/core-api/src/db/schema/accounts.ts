@@ -1,10 +1,12 @@
 import {
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -27,7 +29,13 @@ import {
  * drizzle-kit parses this file directly and cannot resolve the workspace
  * package. A test asserts the two stay in sync (see test/role-enum-sync.test.ts).
  */
-export const userRole = pgEnum("user_role", ["owner", "admin", "viewer"]);
+export const userRole = pgEnum("user_role", [
+  "platform_admin",
+  "tenant_admin",
+  "recruiter",
+  "reviewer",
+  "candidate",
+]);
 
 /** Who/what performed an audited action. */
 export const auditActorType = pgEnum("audit_actor_type", [
@@ -37,16 +45,37 @@ export const auditActorType = pgEnum("audit_actor_type", [
 ]);
 
 /** An account / tenant. Created by signup; every user and API key belongs to one. */
-export const organizations = pgTable("organizations", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const organizations = pgTable(
+  "organizations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    // Per-tenant branding (PRO-57, FR-39). All optional; the candidate/admin UIs
+    // fall back to platform defaults when unset.
+    logoUrl: text("logo_url"),
+    primaryColor: text("primary_color"),
+    /** Custom subdomain (DNS label), unique across tenants when set. */
+    subdomain: text("subdomain"),
+    /**
+     * Data-retention policy (PRO-57, FR-41): days to retain candidate data
+     * before it is eligible for deletion. Null = retain indefinitely (platform
+     * default). Automated enforcement is a worker follow-up; the value is the
+     * policy of record and drives the manual erasure controls today.
+     */
+    retentionDays: integer("retention_days"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    subdomainUnique: uniqueIndex("organizations_subdomain_unique").on(
+      t.subdomain,
+    ),
+  }),
+);
 
 /**
  * Admin users. Email is globally unique (login takes no org selector). The

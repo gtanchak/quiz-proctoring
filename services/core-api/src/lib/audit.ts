@@ -1,5 +1,5 @@
-import type { FastifyBaseLogger } from "fastify";
 import { db } from "../db/client.js";
+import { type LoggerLike, defaultLogger } from "./logger.js";
 import { auditLog } from "../db/schema/accounts.js";
 
 /**
@@ -55,7 +55,10 @@ export async function writeAudit(entry: AuditEntry): Promise<void> {
  * Fire-and-forget audit write. Never throws; logs a warning if the insert
  * fails so a broken audit pipeline is visible without breaking the request.
  */
-export function recordAudit(log: FastifyBaseLogger, entry: AuditEntry): void {
+export function recordAudit(
+  entry: AuditEntry,
+  log: LoggerLike = defaultLogger,
+): void {
   void writeAudit(entry).catch((err) => {
     log.warn({ err, action: entry.action }, "failed to write audit log entry");
   });

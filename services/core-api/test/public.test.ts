@@ -1,11 +1,10 @@
-import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildApp } from "../src/app.js";
+import { createTestApp, type TestApp } from "./helpers/app.js";
 import { pool } from "../src/db/client.js";
 import { type SeededKey, cleanupOrgs, seedOrgWithKey } from "./helpers/seed.js";
 
 describe("candidate access via share links (/v1/public)", () => {
-  let app: FastifyInstance;
+  let app: TestApp;
   let owner: SeededKey;
 
   const admin = () => ({ authorization: `Bearer ${owner.token}` });
@@ -50,8 +49,7 @@ describe("candidate access via share links (/v1/public)", () => {
   }
 
   beforeAll(async () => {
-    app = buildApp();
-    await app.ready();
+    app = await createTestApp();
     owner = await seedOrgWithKey("access-owner");
   });
 

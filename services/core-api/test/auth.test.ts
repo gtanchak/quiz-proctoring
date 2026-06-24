@@ -1,18 +1,16 @@
 import { eq } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildApp } from "../src/app.js";
+import { createTestApp, type TestApp } from "./helpers/app.js";
 import { db, pool } from "../src/db/client.js";
 import { apiKeys } from "../src/db/schema/api-keys.js";
 import { type SeededKey, cleanupOrgs, seedOrgWithKey } from "./helpers/seed.js";
 
 describe("API-key auth on /v1", () => {
-  let app: FastifyInstance;
+  let app: TestApp;
   let seeded: SeededKey;
 
   beforeAll(async () => {
-    app = buildApp();
-    await app.ready();
+    app = await createTestApp();
     seeded = await seedOrgWithKey("test-key");
   });
 

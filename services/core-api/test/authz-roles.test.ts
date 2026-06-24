@@ -1,7 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildApp } from "../src/app.js";
+import { createTestApp, type TestApp } from "./helpers/app.js";
 import { db, pool } from "../src/db/client.js";
 import { auditLog } from "../src/db/schema/accounts.js";
 import { setEmailSender } from "../src/lib/email.js";
@@ -33,13 +32,12 @@ interface Account {
 }
 
 describe("role gating & org isolation", () => {
-  let app: FastifyInstance;
+  let app: TestApp;
   const mail = new CapturingEmailSender();
   const orgIds: string[] = [];
 
   beforeAll(async () => {
-    app = buildApp();
-    await app.ready();
+    app = await createTestApp();
     setEmailSender(mail);
   });
 

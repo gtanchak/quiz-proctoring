@@ -1,7 +1,7 @@
 # ADR 0002 — Assessment engine & assessment-type contract
 
-- **Status:** Proposed (PRO-56) — pending team review
-- **Date:** 2026-06-22
+- **Status:** Accepted (PRO-56) — backend migration to NestJS landed on `develop`
+- **Date:** 2026-06-22 (accepted 2026-06-24)
 - **Context source:** AI Interview & Assessment Platform — engine architecture spike (PRO-56)
 - **Supersedes (in part):** CLAUDE.md §2 backend-framework lock (see Decision 3)
 

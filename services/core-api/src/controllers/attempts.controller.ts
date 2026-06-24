@@ -25,6 +25,8 @@ export function serializeAttempt(row: AttemptRow, now: Date = new Date()) {
     testId: row.testId,
     candidateEmail: row.candidateEmail,
     status: row.status,
+    phase: row.phase,
+    consentAt: row.consentAt?.toISOString() ?? null,
     startedAt: row.startedAt?.toISOString() ?? null,
     deadlineAt: row.deadlineAt?.toISOString() ?? null,
     submittedAt: row.submittedAt?.toISOString() ?? null,
@@ -166,7 +168,7 @@ export async function finalizeAttempt(row: AttemptRow): Promise<AttemptRow> {
       : "submitted";
   const [updated] = await db
     .update(attempts)
-    .set({ status: finalStatus, submittedAt: now })
+    .set({ status: finalStatus, phase: "complete", submittedAt: now })
     .where(and(eq(attempts.id, row.id), eq(attempts.status, "in_progress")))
     .returning();
   if (!updated) {
@@ -203,7 +205,7 @@ export async function autoExpireIfDue(row: AttemptRow): Promise<AttemptRow> {
   }
   const [updated] = await db
     .update(attempts)
-    .set({ status: "expired", submittedAt: new Date() })
+    .set({ status: "expired", phase: "complete", submittedAt: new Date() })
     .where(and(eq(attempts.id, row.id), eq(attempts.status, "in_progress")))
     .returning();
   // Grade what was saved before the deadline; if a concurrent finalize won the

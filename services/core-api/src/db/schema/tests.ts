@@ -117,6 +117,14 @@ export const attemptStatus = pgEnum("attempt_status", [
   "abandoned",
 ]);
 
+/** Candidate session lifecycle phase (PRO-59); see @proctoring/shared SESSION_PHASES. */
+export const sessionPhase = pgEnum("session_phase", [
+  "intro",
+  "items",
+  "wrap_up",
+  "complete",
+]);
+
 export const attempts = pgTable("attempts", {
   id: uuid("id").primaryKey().defaultRandom(),
   testId: uuid("test_id")
@@ -124,6 +132,10 @@ export const attempts = pgTable("attempts", {
     .references(() => tests.id, { onDelete: "cascade" }),
   candidateEmail: text("candidate_email"),
   status: attemptStatus("status").notNull().default("in_progress"),
+  // Session lifecycle phase within a live attempt (PRO-59, FR-19).
+  phase: sessionPhase("phase").notNull().default("intro"),
+  // When the candidate consented to data/recording, captured before start (FR-18).
+  consentAt: timestamp("consent_at", { withTimezone: true }),
   // Hashed per-attempt candidate session credential (PRO-8). The raw token is
   // returned once when a candidate starts/resumes via a public link.
   sessionTokenHash: text("session_token_hash"),

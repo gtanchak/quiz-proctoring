@@ -10,7 +10,11 @@ import {
   Res,
 } from "@nestjs/common";
 import { Type } from "@sinclair/typebox";
-import { SnapshotMetadataSchema } from "@proctoring/shared";
+import {
+  SnapshotMetadataSchema,
+  SessionPhaseSchema,
+  canAdvanceSession,
+} from "@proctoring/shared";
 import { and, count, eq, inArray } from "drizzle-orm";
 import type { Response } from "express";
 import { config } from "../config.js";
@@ -41,7 +45,15 @@ import {
 
 const TokenParams = Type.Object({ token: Type.String() });
 const StartBody = Type.Object(
-  { candidateEmail: Type.String({ format: "email" }) },
+  {
+    candidateEmail: Type.String({ format: "email" }),
+    /** Candidate consent to data/recording, required before start (FR-18). */
+    consent: Type.Boolean(),
+  },
+  { additionalProperties: false },
+);
+const AdvanceBody = Type.Object(
+  { to: SessionPhaseSchema },
   { additionalProperties: false },
 );
 const AnswersBody = Type.Object(
@@ -92,6 +104,11 @@ export class PublicController {
     const state = linkState(test, now);
     if (state !== "open") {
       throw new AppError(409, "CONFLICT", `This link is ${state}`, { state });
+    }
+
+    // Consent is captured before any attempt begins (FR-18, CLAUDE.md §6).
+    if (!dto.consent) {
+      throw AppError.badRequest("Consent is required to start the assessment");
     }
 
     const email = dto.candidateEmail.trim().toLowerCase();
@@ -160,6 +177,8 @@ export class PublicController {
         testId: test.id,
         candidateEmail: email,
         status: "in_progress",
+        phase: "intro",
+        consentAt: now,
         startedAt: now,
         deadlineAt: computeDeadline(now, test.durationMinutes),
         sessionTokenHash: session.hash,
@@ -177,6 +196,36 @@ export class PublicController {
   async getAttempt(@Headers("authorization") authorization: string | undefined) {
     const row = await resolveAttemptBySession(authorization);
     return serializeAttempt(await autoExpireIfDue(row));
+  }
+
+  @Post("attempt/advance")
+  @HttpCode(200)
+  async advance(
+    @Headers("authorization") authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    const { to } = validate(AdvanceBody, body);
+    const attempt = await autoExpireIfDue(
+      await resolveAttemptBySession(authorization),
+    );
+    if (attempt.status !== "in_progress") {
+      throw AppError.conflict("Attempt is not in progress");
+    }
+    // `complete` is reached by submitting, never a free advance.
+    if (to === "complete") {
+      throw AppError.badRequest("Submit the attempt to complete it");
+    }
+    if (!canAdvanceSession(attempt.phase, to)) {
+      throw AppError.badRequest(
+        `Cannot advance the session from ${attempt.phase} to ${to}`,
+      );
+    }
+    const [updated] = await db
+      .update(attempts)
+      .set({ phase: to })
+      .where(eq(attempts.id, attempt.id))
+      .returning();
+    return serializeAttempt(updated);
   }
 
   @Post("attempt/submit")

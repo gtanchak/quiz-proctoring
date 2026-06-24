@@ -91,7 +91,7 @@ describe("evidence storage & viewer (PRO-27)", () => {
       await app.inject({
         method: "POST",
         url: `/v1/public/tests/${token}/start`,
-        payload: { candidateEmail: "c@example.com" },
+        payload: { candidateEmail: "c@example.com", consent: true },
       })
     ).json();
     return {

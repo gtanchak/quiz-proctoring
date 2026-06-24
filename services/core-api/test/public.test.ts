@@ -102,7 +102,7 @@ describe("candidate access via share links (/v1/public)", () => {
     const start = await app.inject({
       method: "POST",
       url: `/v1/public/tests/${token}/start`,
-      payload: { candidateEmail: "c@example.com" },
+      payload: { candidateEmail: "c@example.com", consent: true },
     });
     expect(start.statusCode).toBe(409);
   });
@@ -112,7 +112,7 @@ describe("candidate access via share links (/v1/public)", () => {
     const start = await app.inject({
       method: "POST",
       url: `/v1/public/tests/${token}/start`,
-      payload: { candidateEmail: "alice@example.com" },
+      payload: { candidateEmail: "alice@example.com", consent: true },
     });
     expect(start.statusCode).toBe(201);
     const { attempt, sessionToken, resumed } = start.json();
@@ -150,13 +150,13 @@ describe("candidate access via share links (/v1/public)", () => {
       await app.inject({
         method: "POST",
         url: `/v1/public/tests/${token}/start`,
-        payload: { candidateEmail: "bob@example.com" },
+        payload: { candidateEmail: "bob@example.com", consent: true },
       })
     ).json();
     const second = await app.inject({
       method: "POST",
       url: `/v1/public/tests/${token}/start`,
-      payload: { candidateEmail: "bob@example.com" },
+      payload: { candidateEmail: "bob@example.com", consent: true },
     });
     // Resume returns 200 (no new resource), distinct from 201 on create.
     expect(second.statusCode).toBe(200);
@@ -170,7 +170,7 @@ describe("candidate access via share links (/v1/public)", () => {
       await app.inject({
         method: "POST",
         url: `/v1/public/tests/${token}/start`,
-        payload: { candidateEmail: "carol@example.com" },
+        payload: { candidateEmail: "carol@example.com", consent: true },
       })
     ).json();
     await app.inject({
@@ -182,7 +182,7 @@ describe("candidate access via share links (/v1/public)", () => {
     const blocked = await app.inject({
       method: "POST",
       url: `/v1/public/tests/${token}/start`,
-      payload: { candidateEmail: "carol@example.com" },
+      payload: { candidateEmail: "carol@example.com", consent: true },
     });
     expect(blocked.statusCode).toBe(403);
   });
@@ -199,14 +199,14 @@ describe("candidate access via share links (/v1/public)", () => {
     const ok = await app.inject({
       method: "POST",
       url: `/v1/public/tests/${token}/start`,
-      payload: { candidateEmail: "invited@example.com" },
+      payload: { candidateEmail: "invited@example.com", consent: true },
     });
     expect(ok.statusCode).toBe(201);
 
     const rejected = await app.inject({
       method: "POST",
       url: `/v1/public/tests/${token}/start`,
-      payload: { candidateEmail: "stranger@example.com" },
+      payload: { candidateEmail: "stranger@example.com", consent: true },
     });
     expect(rejected.statusCode).toBe(403);
   });

@@ -42,6 +42,35 @@ export function canAdvanceSession(from: SessionPhase, to: SessionPhase): boolean
   return TRANSITIONS[from]?.includes(to) ?? false;
 }
 
+/**
+ * Per-turn session event log (PRO-59, FR-23). A timestamped, ordered record of
+ * what happened during an attempt — the transcript the AI agent (P2) appends
+ * its turns to. `type` is an open set; these are the engine-level types today.
+ */
+export const SESSION_EVENT_TYPES = [
+  "session_started",
+  "phase_changed",
+  "answers_saved",
+  "snapshot_captured",
+  "session_completed",
+] as const;
+export type SessionEventType = (typeof SESSION_EVENT_TYPES)[number];
+
+export const SessionEventSchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid" }),
+    attemptId: Type.String({ format: "uuid" }),
+    /** A known SESSION_EVENT_TYPE, or a future assessment-type-specific value. */
+    type: Type.String(),
+    phase: Type.Union([SessionPhaseSchema, Type.Null()]),
+    /** Event-specific payload; never secrets/PII (CLAUDE.md §6). */
+    data: Type.Record(Type.String(), Type.Unknown()),
+    at: Type.String({ format: "date-time" }),
+  },
+  { additionalProperties: false },
+);
+export type SessionEvent = Static<typeof SessionEventSchema>;
+
 /** Visible progress for a candidate (FR-16): items answered of total + phase. */
 export const SessionProgressSchema = Type.Object(
   {

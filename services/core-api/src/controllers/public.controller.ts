@@ -35,6 +35,7 @@ import {
 } from "../lib/access.js";
 import { AppError } from "../lib/errors.js";
 import { getEvidenceStore } from "../lib/evidence-store.js";
+import { recordSessionEvent } from "../lib/session-events.js";
 import { computeDeadline } from "../lib/timer.js";
 import { validate } from "../lib/validate.js";
 import {
@@ -184,6 +185,7 @@ export class PublicController {
         sessionTokenHash: session.hash,
       })
       .returning();
+    await recordSessionEvent(row.id, "session_started", { phase: "intro" });
     res.status(201);
     return {
       attempt: serializeAttempt(row, now),
@@ -225,6 +227,7 @@ export class PublicController {
       .set({ phase: to })
       .where(eq(attempts.id, attempt.id))
       .returning();
+    await recordSessionEvent(updated.id, "phase_changed", { phase: to });
     return serializeAttempt(updated);
   }
 
@@ -280,6 +283,10 @@ export class PublicController {
           },
         });
     }
+    await recordSessionEvent(attempt.id, "answers_saved", {
+      phase: attempt.phase,
+      data: { count: dto.answers.length },
+    });
     return { saved: dto.answers.length };
   }
 
@@ -328,6 +335,10 @@ export class PublicController {
       .onConflictDoNothing({ target: evidence.id });
 
     const grant = await store.presignUpload(key, meta.contentType);
+    await recordSessionEvent(attempt.id, "snapshot_captured", {
+      phase: attempt.phase,
+      data: { snapshotId: meta.id, kind: meta.kind },
+    });
     const expiresAt = new Date(
       Date.now() + config.EVIDENCE_UPLOAD_URL_TTL * 1000,
     ).toISOString();

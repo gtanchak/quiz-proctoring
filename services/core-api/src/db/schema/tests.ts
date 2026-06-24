@@ -1,4 +1,5 @@
 import {
+  bigserial,
   boolean,
   index,
   integer,
@@ -242,9 +243,33 @@ export const evidence = pgTable(
   (t) => [index("evidence_attempt_idx").on(t.attemptId)],
 );
 
+/**
+ * Per-turn session event log (PRO-59, FR-23). Append-only, ordered by the
+ * global `seq`; the transcript the AI agent (P2) will append its turns to.
+ */
+export const sessionEvents = pgTable(
+  "session_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    // Global monotonic sequence — reliable ordering even for same-instant events.
+    seq: bigserial("seq", { mode: "number" }).notNull(),
+    type: text("type").notNull(),
+    phase: sessionPhase("phase"),
+    data: jsonb("data").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("session_events_attempt_idx").on(t.attemptId, t.seq)],
+);
+
 export type TestRow = typeof tests.$inferSelect;
 export type QuestionRow = typeof questions.$inferSelect;
 export type AttemptRow = typeof attempts.$inferSelect;
 export type TestInviteRow = typeof testInvites.$inferSelect;
 export type ResponseRow = typeof responses.$inferSelect;
 export type EvidenceRow = typeof evidence.$inferSelect;
+export type SessionEventRow = typeof sessionEvents.$inferSelect;

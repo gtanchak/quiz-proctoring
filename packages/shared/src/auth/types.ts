@@ -1,4 +1,4 @@
-import { Type, type Static } from "@sinclair/typebox";
+import { Type, type Static, type TSchema } from "@sinclair/typebox";
 
 /**
  * Authentication & accounts contract (PRO-39).
@@ -262,6 +262,51 @@ export const TenantSummaryDtoSchema = Type.Object(
   { additionalProperties: false },
 );
 export type TenantSummaryDto = Static<typeof TenantSummaryDtoSchema>;
+
+// --- Per-tenant branding (PRO-57, FR-39) ------------------------------------
+
+const NullableString = <T extends TSchema>(schema: T) =>
+  Type.Union([schema, Type.Null()]);
+
+/** A logo URL (https), a hex colour, and a DNS-label subdomain. */
+const LogoUrlSchema = Type.String({ maxLength: 2000 });
+const ColorSchema = Type.String({
+  pattern: "^#[0-9a-fA-F]{6}$",
+  description: "Hex colour, e.g. #1a2b3c",
+});
+const SubdomainSchema = Type.String({
+  pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+  minLength: 1,
+  maxLength: 63,
+  description: "Lowercase DNS label (a–z, 0–9, hyphen)",
+});
+
+/** A tenant's current branding (nulls mean "use platform defaults"). */
+export const TenantBrandingSchema = Type.Object(
+  {
+    logoUrl: NullableString(LogoUrlSchema),
+    primaryColor: NullableString(ColorSchema),
+    subdomain: NullableString(SubdomainSchema),
+  },
+  { additionalProperties: false },
+);
+export type TenantBranding = Static<typeof TenantBrandingSchema>;
+
+/**
+ * Update tenant branding (tenant_admin). Every field is optional; an explicit
+ * `null` clears it back to the platform default.
+ */
+export const UpdateTenantBrandingRequestSchema = Type.Object(
+  {
+    logoUrl: Type.Optional(NullableString(LogoUrlSchema)),
+    primaryColor: Type.Optional(NullableString(ColorSchema)),
+    subdomain: Type.Optional(NullableString(SubdomainSchema)),
+  },
+  { additionalProperties: false },
+);
+export type UpdateTenantBrandingRequest = Static<
+  typeof UpdateTenantBrandingRequestSchema
+>;
 
 // --- Identity ("who am I") --------------------------------------------------
 

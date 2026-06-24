@@ -5,6 +5,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -43,16 +44,30 @@ export const auditActorType = pgEnum("audit_actor_type", [
 ]);
 
 /** An account / tenant. Created by signup; every user and API key belongs to one. */
-export const organizations = pgTable("organizations", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const organizations = pgTable(
+  "organizations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    // Per-tenant branding (PRO-57, FR-39). All optional; the candidate/admin UIs
+    // fall back to platform defaults when unset.
+    logoUrl: text("logo_url"),
+    primaryColor: text("primary_color"),
+    /** Custom subdomain (DNS label), unique across tenants when set. */
+    subdomain: text("subdomain"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    subdomainUnique: uniqueIndex("organizations_subdomain_unique").on(
+      t.subdomain,
+    ),
+  }),
+);
 
 /**
  * Admin users. Email is globally unique (login takes no org selector). The

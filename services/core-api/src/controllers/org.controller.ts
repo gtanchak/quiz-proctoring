@@ -11,13 +11,16 @@ import {
 import {
   ChangeRoleRequestSchema,
   CreateMemberRequestSchema,
+  type TenantBranding,
+  UpdateTenantBrandingRequestSchema,
 } from "@proctoring/shared";
 import { Type } from "@sinclair/typebox";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import { Auth } from "../auth/auth.decorator.js";
 import type { RequestAuth } from "../auth/request-auth.js";
 import { Roles } from "../auth/roles.decorator.js";
+import { TenantId } from "../auth/tenant.decorator.js";
 import { config } from "../config.js";
 import { db } from "../db/client.js";
 import {
@@ -171,6 +174,67 @@ export class OrgController {
       targetType: "user",
       targetId: target.id,
     });
+  }
+
+  @Get("branding")
+  async getBranding(@TenantId() tenantId: string): Promise<TenantBranding> {
+    const [row] = await db
+      .select({
+        logoUrl: organizations.logoUrl,
+        primaryColor: organizations.primaryColor,
+        subdomain: organizations.subdomain,
+      })
+      .from(organizations)
+      .where(eq(organizations.id, tenantId))
+      .limit(1);
+    if (!row) {
+      throw AppError.notFound("Tenant not found");
+    }
+    return row;
+  }
+
+  @Patch("branding")
+  @Roles("tenant_admin")
+  async updateBranding(
+    @TenantId() tenantId: string,
+    @Body() body: unknown,
+  ): Promise<TenantBranding> {
+    const dto = validate(UpdateTenantBrandingRequestSchema, body);
+
+    // A non-null subdomain must be unique across tenants (the DB unique index is
+    // the hard guarantee; this pre-check turns the race-free common case into a
+    // friendly 409 rather than a constraint violation).
+    if (dto.subdomain) {
+      const [taken] = await db
+        .select({ id: organizations.id })
+        .from(organizations)
+        .where(
+          and(
+            eq(organizations.subdomain, dto.subdomain),
+            ne(organizations.id, tenantId),
+          ),
+        )
+        .limit(1);
+      if (taken) {
+        throw AppError.conflict("Subdomain is already taken");
+      }
+    }
+
+    const [row] = await db
+      .update(organizations)
+      .set({
+        ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
+        ...(dto.primaryColor !== undefined && { primaryColor: dto.primaryColor }),
+        ...(dto.subdomain !== undefined && { subdomain: dto.subdomain }),
+        updatedAt: new Date(),
+      })
+      .where(eq(organizations.id, tenantId))
+      .returning({
+        logoUrl: organizations.logoUrl,
+        primaryColor: organizations.primaryColor,
+        subdomain: organizations.subdomain,
+      });
+    return row;
   }
 }
 

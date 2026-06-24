@@ -85,6 +85,13 @@
 			"when": 1780685234694,
 			"tag": "0011_multitenant_roles",
 			"breakpoints": true
+		},
+		{
+			"idx": 12,
+			"version": "7",
+			"when": 1780685234695,
+			"tag": "0012_tenant_branding",
+			"breakpoints": true
 		}
 	]
 }

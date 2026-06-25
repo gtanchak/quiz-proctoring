@@ -7,7 +7,7 @@
  */
 
 /** Semantic version of the shared contract surface. */
-export const SHARED_CONTRACT_VERSION = "0.6.0" as const;
+export const SHARED_CONTRACT_VERSION = "0.7.0" as const;
 
 /** Marker confirming the shared package resolved at runtime (used by stubs). */
 export const sharedPackageName = "@proctoring/shared" as const;
@@ -26,3 +26,6 @@ export * from "./evidence/index.js";
 
 // Per-attempt report contract: summary + violation timeline (PRO-26).
 export * from "./report/index.js";
+
+// Candidate session lifecycle: phases, transitions, progress (PRO-59).
+export * from "./session/index.js";

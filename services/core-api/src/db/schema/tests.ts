@@ -1,4 +1,5 @@
 import {
+  bigserial,
   boolean,
   index,
   integer,
@@ -49,6 +50,13 @@ export const tests = pgTable("tests", {
   availableFrom: timestamp("available_from", { withTimezone: true }),
   availableUntil: timestamp("available_until", { withTimezone: true }),
   maxAttempts: integer("max_attempts").notNull().default(1),
+  // Pre-start device-check requirements gated by modality (PRO-59, FR-12):
+  // which proctoring signals a candidate must grant. Shape =
+  // @proctoring/shared ProctoringRequirements. Default: none (MCQ needs no
+  // camera/mic); proctored/AI modalities set the signals they require.
+  proctoring: jsonb("proctoring")
+    .notNull()
+    .default({ camera: false, microphone: false, screen: false }),
   // Scoring config. Per-question points live on the questions table.
   passMark: integer("pass_mark"),
   negativeMarking: boolean("negative_marking").notNull().default(false),
@@ -117,6 +125,14 @@ export const attemptStatus = pgEnum("attempt_status", [
   "abandoned",
 ]);
 
+/** Candidate session lifecycle phase (PRO-59); see @proctoring/shared SESSION_PHASES. */
+export const sessionPhase = pgEnum("session_phase", [
+  "intro",
+  "items",
+  "wrap_up",
+  "complete",
+]);
+
 export const attempts = pgTable("attempts", {
   id: uuid("id").primaryKey().defaultRandom(),
   testId: uuid("test_id")
@@ -124,6 +140,10 @@ export const attempts = pgTable("attempts", {
     .references(() => tests.id, { onDelete: "cascade" }),
   candidateEmail: text("candidate_email"),
   status: attemptStatus("status").notNull().default("in_progress"),
+  // Session lifecycle phase within a live attempt (PRO-59, FR-19).
+  phase: sessionPhase("phase").notNull().default("intro"),
+  // When the candidate consented to data/recording, captured before start (FR-18).
+  consentAt: timestamp("consent_at", { withTimezone: true }),
   // Hashed per-attempt candidate session credential (PRO-8). The raw token is
   // returned once when a candidate starts/resumes via a public link.
   sessionTokenHash: text("session_token_hash"),
@@ -230,9 +250,33 @@ export const evidence = pgTable(
   (t) => [index("evidence_attempt_idx").on(t.attemptId)],
 );
 
+/**
+ * Per-turn session event log (PRO-59, FR-23). Append-only, ordered by the
+ * global `seq`; the transcript the AI agent (P2) will append its turns to.
+ */
+export const sessionEvents = pgTable(
+  "session_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    // Global monotonic sequence — reliable ordering even for same-instant events.
+    seq: bigserial("seq", { mode: "number" }).notNull(),
+    type: text("type").notNull(),
+    phase: sessionPhase("phase"),
+    data: jsonb("data").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("session_events_attempt_idx").on(t.attemptId, t.seq)],
+);
+
 export type TestRow = typeof tests.$inferSelect;
 export type QuestionRow = typeof questions.$inferSelect;
 export type AttemptRow = typeof attempts.$inferSelect;
 export type TestInviteRow = typeof testInvites.$inferSelect;
 export type ResponseRow = typeof responses.$inferSelect;
 export type EvidenceRow = typeof evidence.$inferSelect;
+export type SessionEventRow = typeof sessionEvents.$inferSelect;

@@ -1,19 +1,22 @@
 import { Controller, Get, Body, HttpCode, Param, Post, Query } from "@nestjs/common";
 import { Type } from "@sinclair/typebox";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq } from "drizzle-orm";
 import { Auth } from "../auth/auth.decorator.js";
 import type { RequestAuth } from "../auth/request-auth.js";
 import { RequireWrite } from "../auth/roles.decorator.js";
+import type { SessionEvent } from "@proctoring/shared";
 import { db } from "../db/client.js";
 import {
   attempts,
   type AttemptRow,
   responses,
+  sessionEvents,
   tests,
 } from "../db/schema/tests.js";
 import { AppError } from "../lib/errors.js";
 import { gradeAttempt } from "../lib/grade-attempt.js";
 import { PaginationQuery } from "../lib/pagination.js";
+import { recordSessionEvent } from "../lib/session-events.js";
 import { findOrgTest } from "../lib/test-access.js";
 import { computeDeadline, timerState } from "../lib/timer.js";
 import { validate } from "../lib/validate.js";
@@ -25,6 +28,8 @@ export function serializeAttempt(row: AttemptRow, now: Date = new Date()) {
     testId: row.testId,
     candidateEmail: row.candidateEmail,
     status: row.status,
+    phase: row.phase,
+    consentAt: row.consentAt?.toISOString() ?? null,
     startedAt: row.startedAt?.toISOString() ?? null,
     deadlineAt: row.deadlineAt?.toISOString() ?? null,
     submittedAt: row.submittedAt?.toISOString() ?? null,
@@ -147,6 +152,28 @@ export class AttemptsController {
       awardedPoints: r.awardedPoints,
     }));
   }
+
+  @Get("attempts/:id/events")
+  async events(
+    @Auth() auth: RequestAuth,
+    @Param() params: Record<string, string>,
+  ): Promise<SessionEvent[]> {
+    const { id } = validate(IdParams, params);
+    const attempt = await findOrgAttempt(id, auth.orgId);
+    const rows = await db
+      .select()
+      .from(sessionEvents)
+      .where(eq(sessionEvents.attemptId, attempt.id))
+      .orderBy(asc(sessionEvents.seq));
+    return rows.map((r) => ({
+      id: r.id,
+      attemptId: r.attemptId,
+      type: r.type,
+      phase: r.phase,
+      data: r.data as Record<string, unknown>,
+      at: r.createdAt.toISOString(),
+    }));
+  }
 }
 
 /**
@@ -166,12 +193,16 @@ export async function finalizeAttempt(row: AttemptRow): Promise<AttemptRow> {
       : "submitted";
   const [updated] = await db
     .update(attempts)
-    .set({ status: finalStatus, submittedAt: now })
+    .set({ status: finalStatus, phase: "complete", submittedAt: now })
     .where(and(eq(attempts.id, row.id), eq(attempts.status, "in_progress")))
     .returning();
   if (!updated) {
     throw AppError.conflict("Attempt is already finalized");
   }
+  await recordSessionEvent(updated.id, "session_completed", {
+    phase: "complete",
+    data: { status: updated.status },
+  });
   return gradeAttempt(updated);
 }
 
@@ -203,10 +234,17 @@ export async function autoExpireIfDue(row: AttemptRow): Promise<AttemptRow> {
   }
   const [updated] = await db
     .update(attempts)
-    .set({ status: "expired", submittedAt: new Date() })
+    .set({ status: "expired", phase: "complete", submittedAt: new Date() })
     .where(and(eq(attempts.id, row.id), eq(attempts.status, "in_progress")))
     .returning();
   // Grade what was saved before the deadline; if a concurrent finalize won the
   // race (no row updated), leave grading to that path.
-  return updated ? await gradeAttempt(updated) : row;
+  if (!updated) {
+    return row;
+  }
+  await recordSessionEvent(updated.id, "session_completed", {
+    phase: "complete",
+    data: { status: updated.status },
+  });
+  return gradeAttempt(updated);
 }

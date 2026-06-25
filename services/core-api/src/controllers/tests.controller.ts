@@ -10,6 +10,10 @@ import {
   Post,
   Query,
 } from "@nestjs/common";
+import {
+  type ProctoringRequirements,
+  ProctoringRequirementsSchema,
+} from "@proctoring/shared";
 import { Type } from "@sinclair/typebox";
 import { and, asc, count, desc, eq } from "drizzle-orm";
 import { Auth } from "../auth/auth.decorator.js";
@@ -48,6 +52,7 @@ function serializeTest(row: TestRow) {
     maxAttempts: row.maxAttempts,
     passMark: row.passMark,
     negativeMarking: row.negativeMarking,
+    proctoring: row.proctoring as ProctoringRequirements,
     accessMode: row.accessMode,
     accessToken: row.accessToken,
     createdAt: row.createdAt.toISOString(),
@@ -67,6 +72,7 @@ const CreateTestBody = Type.Object(
     maxAttempts: Type.Optional(Type.Integer({ minimum: 1 })),
     passMark: Type.Optional(Type.Integer({ minimum: 0 })),
     negativeMarking: Type.Optional(Type.Boolean()),
+    proctoring: Type.Optional(ProctoringRequirementsSchema),
     accessMode: Type.Optional(AccessMode),
   },
   { additionalProperties: false },
@@ -127,6 +133,7 @@ export class TestsController {
         maxAttempts: body.maxAttempts,
         passMark: body.passMark,
         negativeMarking: body.negativeMarking,
+        ...(body.proctoring && { proctoring: body.proctoring }),
         accessMode: body.accessMode,
         accessToken: generateAccessToken(),
       })
@@ -226,6 +233,7 @@ export class TestsController {
         ...(body.negativeMarking !== undefined && {
           negativeMarking: body.negativeMarking,
         }),
+        ...(body.proctoring !== undefined && { proctoring: body.proctoring }),
         ...(body.accessMode !== undefined && { accessMode: body.accessMode }),
         updatedAt: new Date(),
       })

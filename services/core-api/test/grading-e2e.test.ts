@@ -73,7 +73,7 @@ describe("answer capture & auto-grading (end-to-end)", () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/public/tests/${token}/start`,
-      payload: { candidateEmail: email },
+      payload: { candidateEmail: email, consent: true },
     });
     return res.json().sessionToken;
   }

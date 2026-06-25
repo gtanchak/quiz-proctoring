@@ -10,7 +10,12 @@ import {
   Res,
 } from "@nestjs/common";
 import { Type } from "@sinclair/typebox";
-import { SnapshotMetadataSchema } from "@proctoring/shared";
+import {
+  SnapshotMetadataSchema,
+  SessionPhaseSchema,
+  type SessionProgress,
+  canAdvanceSession,
+} from "@proctoring/shared";
 import { and, count, eq, inArray } from "drizzle-orm";
 import type { Response } from "express";
 import { config } from "../config.js";
@@ -31,7 +36,8 @@ import {
 } from "../lib/access.js";
 import { AppError } from "../lib/errors.js";
 import { getEvidenceStore } from "../lib/evidence-store.js";
-import { computeDeadline } from "../lib/timer.js";
+import { recordSessionEvent } from "../lib/session-events.js";
+import { computeDeadline, timerState } from "../lib/timer.js";
 import { validate } from "../lib/validate.js";
 import {
   autoExpireIfDue,
@@ -41,7 +47,15 @@ import {
 
 const TokenParams = Type.Object({ token: Type.String() });
 const StartBody = Type.Object(
-  { candidateEmail: Type.String({ format: "email" }) },
+  {
+    candidateEmail: Type.String({ format: "email" }),
+    /** Candidate consent to data/recording, required before start (FR-18). */
+    consent: Type.Boolean(),
+  },
+  { additionalProperties: false },
+);
+const AdvanceBody = Type.Object(
+  { to: SessionPhaseSchema },
   { additionalProperties: false },
 );
 const AnswersBody = Type.Object(
@@ -75,6 +89,9 @@ export class PublicController {
       durationMinutes: test.durationMinutes,
       accessMode: test.accessMode,
       state: linkState(test),
+      // Pre-start device checks the candidate must pass, gated by modality
+      // (FR-12). Empty/all-false means no device check is required (e.g. MCQ).
+      deviceCheck: test.proctoring,
     };
   }
 
@@ -92,6 +109,11 @@ export class PublicController {
     const state = linkState(test, now);
     if (state !== "open") {
       throw new AppError(409, "CONFLICT", `This link is ${state}`, { state });
+    }
+
+    // Consent is captured before any attempt begins (FR-18, CLAUDE.md §6).
+    if (!dto.consent) {
+      throw AppError.badRequest("Consent is required to start the assessment");
     }
 
     const email = dto.candidateEmail.trim().toLowerCase();
@@ -129,6 +151,9 @@ export class PublicController {
           .set({ sessionTokenHash: session.hash })
           .where(eq(attempts.id, live.id))
           .returning();
+        await recordSessionEvent(resumed.id, "session_resumed", {
+          phase: resumed.phase,
+        });
         res.status(200);
         return {
           attempt: serializeAttempt(resumed, now),
@@ -160,11 +185,14 @@ export class PublicController {
         testId: test.id,
         candidateEmail: email,
         status: "in_progress",
+        phase: "intro",
+        consentAt: now,
         startedAt: now,
         deadlineAt: computeDeadline(now, test.durationMinutes),
         sessionTokenHash: session.hash,
       })
       .returning();
+    await recordSessionEvent(row.id, "session_started", { phase: "intro" });
     res.status(201);
     return {
       attempt: serializeAttempt(row, now),
@@ -177,6 +205,67 @@ export class PublicController {
   async getAttempt(@Headers("authorization") authorization: string | undefined) {
     const row = await resolveAttemptBySession(authorization);
     return serializeAttempt(await autoExpireIfDue(row));
+  }
+
+  /**
+   * Visible progress + server-authoritative time remaining (FR-16). Safe to
+   * call any time, including right after a reconnect (FR-17) to re-sync the
+   * candidate's countdown against the server clock.
+   */
+  @Get("attempt/progress")
+  async progress(
+    @Headers("authorization") authorization: string | undefined,
+  ): Promise<SessionProgress> {
+    const attempt = await autoExpireIfDue(
+      await resolveAttemptBySession(authorization),
+    );
+    const [[{ total }], [{ answered }]] = await Promise.all([
+      db
+        .select({ total: count() })
+        .from(questions)
+        .where(eq(questions.testId, attempt.testId)),
+      db
+        .select({ answered: count() })
+        .from(responses)
+        .where(eq(responses.attemptId, attempt.id)),
+    ]);
+    return {
+      phase: attempt.phase,
+      answered,
+      total,
+      remainingMs: timerState(attempt).remainingMs,
+    };
+  }
+
+  @Post("attempt/advance")
+  @HttpCode(200)
+  async advance(
+    @Headers("authorization") authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    const { to } = validate(AdvanceBody, body);
+    const attempt = await autoExpireIfDue(
+      await resolveAttemptBySession(authorization),
+    );
+    if (attempt.status !== "in_progress") {
+      throw AppError.conflict("Attempt is not in progress");
+    }
+    // `complete` is reached by submitting, never a free advance.
+    if (to === "complete") {
+      throw AppError.badRequest("Submit the attempt to complete it");
+    }
+    if (!canAdvanceSession(attempt.phase, to)) {
+      throw AppError.badRequest(
+        `Cannot advance the session from ${attempt.phase} to ${to}`,
+      );
+    }
+    const [updated] = await db
+      .update(attempts)
+      .set({ phase: to })
+      .where(eq(attempts.id, attempt.id))
+      .returning();
+    await recordSessionEvent(updated.id, "phase_changed", { phase: to });
+    return serializeAttempt(updated);
   }
 
   @Post("attempt/submit")
@@ -231,6 +320,10 @@ export class PublicController {
           },
         });
     }
+    await recordSessionEvent(attempt.id, "answers_saved", {
+      phase: attempt.phase,
+      data: { count: dto.answers.length },
+    });
     return { saved: dto.answers.length };
   }
 
@@ -279,6 +372,10 @@ export class PublicController {
       .onConflictDoNothing({ target: evidence.id });
 
     const grant = await store.presignUpload(key, meta.contentType);
+    await recordSessionEvent(attempt.id, "snapshot_captured", {
+      phase: attempt.phase,
+      data: { snapshotId: meta.id, kind: meta.kind },
+    });
     const expiresAt = new Date(
       Date.now() + config.EVIDENCE_UPLOAD_URL_TTL * 1000,
     ).toISOString();

@@ -48,6 +48,7 @@ const CreateQuestionBody = Type.Object(
     negativeMarking: Type.Optional(Type.Boolean()),
     gradingMode: Type.Optional(GradingMode),
     position: Type.Optional(Type.Integer({ minimum: 0 })),
+    competency: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
     options: Type.Array(OptionInput, { minItems: 2, maxItems: 26 }),
   },
   { additionalProperties: false },
@@ -106,6 +107,7 @@ function serializeQuestion(row: QuestionRow) {
     negativeMarking: row.negativeMarking,
     gradingMode: row.gradingMode,
     position: row.position,
+    competency: row.competency,
     options: row.options.map((o) => ({
       id: o.id,
       text: o.text,
@@ -164,6 +166,7 @@ export class QuestionsController {
         points: body.points,
         negativeMarking: body.negativeMarking,
         position,
+        competency: body.competency,
       })
       .returning();
     return serializeQuestion(row);
@@ -236,6 +239,7 @@ export class QuestionsController {
           negativeMarking: body.negativeMarking,
         }),
         ...(body.position !== undefined && { position: body.position }),
+        ...(body.competency !== undefined && { competency: body.competency }),
         gradingMode,
         ...optionFields,
       })

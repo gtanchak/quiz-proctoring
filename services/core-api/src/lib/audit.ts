@@ -25,6 +25,7 @@ export const AuditAction = {
   USER_REMOVED: "user.removed",
   EVIDENCE_DELETED: "evidence.deleted",
   CANDIDATE_DATA_ERASED: "candidate.data_erased",
+  RECOMMENDATION_OVERRIDDEN: "recommendation.overridden",
 } as const;
 
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];

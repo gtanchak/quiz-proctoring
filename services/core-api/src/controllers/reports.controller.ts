@@ -1,16 +1,33 @@
-import { Controller, Get, Param } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch } from "@nestjs/common";
 import { Type } from "@sinclair/typebox";
 import {
   ATTEMPT_REPORT_SCHEMA_VERSION,
+  type AttemptEvaluation,
   type AttemptReport,
   type AttemptReportSummary,
   type AttemptTerminationReason,
+  type CompetencyScore,
+  type RecommendationBand,
+  RecommendationBandSchema,
   type ReportViolation,
+  aggregateCompetencies,
 } from "@proctoring/shared";
 import { and, eq } from "drizzle-orm";
+import { Auth } from "../auth/auth.decorator.js";
+import type { RequestAuth } from "../auth/request-auth.js";
+import { RequireWrite } from "../auth/roles.decorator.js";
 import { TenantId } from "../auth/tenant.decorator.js";
 import { db } from "../db/client.js";
-import { type AttemptRow, attempts, tests } from "../db/schema/tests.js";
+import {
+  type AttemptRow,
+  attempts,
+  type QuestionRow,
+  questions,
+  type ResponseRow,
+  responses,
+  tests,
+} from "../db/schema/tests.js";
+import { AuditAction, recordAudit } from "../lib/audit.js";
 import { AppError } from "../lib/errors.js";
 import { validate } from "../lib/validate.js";
 import {
@@ -19,6 +36,13 @@ import {
 } from "../lib/violations-client.js";
 
 const IdParams = Type.Object({ id: Type.String({ format: "uuid" }) });
+const OverrideBody = Type.Object(
+  {
+    band: RecommendationBandSchema,
+    note: Type.Optional(Type.Union([Type.String({ maxLength: 2000 }), Type.Null()])),
+  },
+  { additionalProperties: false },
+);
 
 interface ReportTest {
   id: string;
@@ -43,9 +67,97 @@ export class ReportsController {
   ): Promise<AttemptReport> {
     const { id } = validate(IdParams, params);
     const { attempt, test } = await loadOwnedAttempt(id, tenantId);
-    const violations = await getViolationsClient().listForAttempt(attempt.id);
-    return buildReport(attempt, test, violations);
+    const [violations, qs, rs] = await Promise.all([
+      getViolationsClient().listForAttempt(attempt.id),
+      db.select().from(questions).where(eq(questions.testId, attempt.testId)),
+      db.select().from(responses).where(eq(responses.attemptId, attempt.id)),
+    ]);
+    const report = buildReport(attempt, test, violations);
+    report.evaluation = buildEvaluation(attempt, qs, rs);
+    return report;
   }
+
+  /**
+   * Record a recruiter's manual override of the recommendation band (PRO-60,
+   * FR-28/FR-30) — the human-in-the-loop hook. Audited; advisory, never a
+   * verdict. Returns the recomputed evaluation reflecting the override.
+   */
+  @Patch("attempts/:id/recommendation")
+  @RequireWrite()
+  async overrideRecommendation(
+    @Auth() auth: RequestAuth,
+    @Param() params: Record<string, string>,
+    @Body() body: unknown,
+  ): Promise<AttemptEvaluation> {
+    const { id } = validate(IdParams, params);
+    const dto = validate(OverrideBody, body);
+    const { attempt } = await loadOwnedAttempt(id, auth.orgId);
+    const [updated] = await db
+      .update(attempts)
+      .set({
+        recommendationOverride: dto.band,
+        recommendationNote: dto.note ?? null,
+      })
+      .where(eq(attempts.id, attempt.id))
+      .returning();
+    recordAudit({
+      orgId: auth.orgId,
+      actorType: auth.actorType,
+      actorUserId: auth.userId,
+      action: AuditAction.RECOMMENDATION_OVERRIDDEN,
+      targetType: "attempt",
+      targetId: attempt.id,
+      metadata: { band: dto.band },
+    });
+    const [qs, rs] = await Promise.all([
+      db.select().from(questions).where(eq(questions.testId, updated.testId)),
+      db.select().from(responses).where(eq(responses.attemptId, updated.id)),
+    ]);
+    return buildEvaluation(updated, qs, rs);
+  }
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Competency-aggregated evaluation for an attempt (PRO-60). Groups graded
+ * questions by competency (untagged → "general"), weights each competency by
+ * its points, and applies any human override of the band. MCQ is deterministic,
+ * so confidence is 1.
+ */
+function buildEvaluation(
+  attempt: AttemptRow,
+  qs: QuestionRow[],
+  rs: ResponseRow[],
+): AttemptEvaluation {
+  const awardedByQ = new Map(rs.map((r) => [r.questionId, r.awardedPoints ?? 0]));
+  const buckets = new Map<string, { score: number; max: number }>();
+  for (const q of qs) {
+    const key = q.competency ?? "general";
+    const b = buckets.get(key) ?? { score: 0, max: 0 };
+    b.max += q.points;
+    b.score += awardedByQ.get(q.id) ?? 0;
+    buckets.set(key, b);
+  }
+  const competencies: CompetencyScore[] = [...buckets].map(([key, b]) => ({
+    key,
+    score: round2(b.score),
+    maxScore: b.max,
+    // Default weighting is points-proportional (percent == overall raw percent);
+    // per-competency weight config is a later refinement.
+    weight: b.max,
+    confidence: 1,
+  }));
+  const agg = aggregateCompetencies(competencies);
+  const override: AttemptEvaluation["override"] = attempt.recommendationOverride
+    ? {
+        band: attempt.recommendationOverride as RecommendationBand,
+        note: attempt.recommendationNote ?? null,
+      }
+    : null;
+  return { ...agg, override };
 }
 
 /** Loads an attempt and its test, scoped to the org, or throws 404. */

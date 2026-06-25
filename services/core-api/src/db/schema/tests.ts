@@ -113,6 +113,9 @@ export const questions = pgTable("questions", {
   points: integer("points").notNull().default(1),
   negativeMarking: boolean("negative_marking").notNull().default(false),
   position: integer("position").notNull().default(0),
+  // Optional competency tag for competency-based aggregation (PRO-60, FR-25).
+  // Untagged questions aggregate under a single "general" competency.
+  competency: text("competency"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -158,6 +161,10 @@ export const attempts = pgTable("attempts", {
   score: real("score"),
   maxScore: real("max_score"),
   gradedAt: timestamp("graded_at", { withTimezone: true }),
+  // Human override of the advisory recommendation band (PRO-60, FR-28/FR-30).
+  // Stored as the band string; null = use the computed band. Audited on change.
+  recommendationOverride: text("recommendation_override"),
+  recommendationNote: text("recommendation_note"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

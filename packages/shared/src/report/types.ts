@@ -1,4 +1,8 @@
 import { Type, type Static } from "@sinclair/typebox";
+import {
+  CompetencyScoreSchema,
+  RecommendationBandSchema,
+} from "../scoring/types.js";
 
 /**
  * Per-attempt report contract (PRO-26): what an admin sees when reviewing one
@@ -107,6 +111,37 @@ export const ReportTestInfoSchema = Type.Object(
 );
 export type ReportTestInfo = Static<typeof ReportTestInfoSchema>;
 
+/**
+ * The evaluation block (PRO-60): competency-aggregated score, the advisory
+ * recommendation band, and a confidence/low-confidence signal — plus any human
+ * override. The band is **never a verdict**; a reviewer always decides (FR-28).
+ */
+export const AttemptEvaluationSchema = Type.Object(
+  {
+    score: Type.Number(),
+    maxScore: Type.Number(),
+    percent: Type.Number({ minimum: 0, maximum: 100 }),
+    /** Advisory band derived from `percent` (overridable by a human). */
+    band: RecommendationBandSchema,
+    competencies: Type.Array(CompetencyScoreSchema),
+    confidence: Type.Number({ minimum: 0, maximum: 1 }),
+    lowConfidence: Type.Boolean(),
+    /** A recruiter's manual override of the band, audited; null when none. */
+    override: Type.Union([
+      Type.Object(
+        {
+          band: RecommendationBandSchema,
+          note: Type.Union([Type.String(), Type.Null()]),
+        },
+        { additionalProperties: false },
+      ),
+      Type.Null(),
+    ]),
+  },
+  { $id: "AttemptEvaluation", additionalProperties: false },
+);
+export type AttemptEvaluation = Static<typeof AttemptEvaluationSchema>;
+
 /** The full per-attempt report. */
 export const AttemptReportSchema = Type.Object(
   {
@@ -119,6 +154,9 @@ export const AttemptReportSchema = Type.Object(
     /** Violations in chronological order (ascending startedAt). */
     timeline: Type.Array(ReportViolationSchema),
     violationCount: Type.Integer({ minimum: 0 }),
+    /** Competency scores, band, and confidence (PRO-60). Optional: present for
+     * scored assessment types (MCQ today). */
+    evaluation: Type.Optional(AttemptEvaluationSchema),
     /** When the report was assembled (server time). */
     generatedAt: Type.String({ format: "date-time" }),
   },
